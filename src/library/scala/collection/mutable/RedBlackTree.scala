@@ -1,10 +1,20 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala
 package collection.mutable
 
 import scala.annotation.tailrec
-import collection.AbstractIterator
-import collection.Iterator
-
+import collection.{AbstractIterator, Iterator}
 import java.lang.String
 
 /**
@@ -67,12 +77,6 @@ private[collection] object RedBlackTree {
     case node => Some(node.value)
   }
 
-  def getKey[A : Ordering](tree: Tree[A, _], key: A): Option[A] =
-    getNode(tree.root, key) match {
-      case null => None
-      case node => Some(node.key)
-    }
-
   @tailrec private[this] def getNode[A, B](node: Node[A, B], key: A)(implicit ord: Ordering[A]): Node[A, B] =
     if (node eq null) null
     else {
@@ -82,7 +86,7 @@ private[collection] object RedBlackTree {
       else node
     }
 
-  def contains[A: Ordering](tree: Tree[A, _], key: A) = getNode(tree.root, key) ne null
+  def contains[A: Ordering](tree: Tree[A, _], key: A): Boolean = getNode(tree.root, key) ne null
 
   def min[A, B](tree: Tree[A, B]): Option[(A, B)] = minNode(tree.root) match {
     case null => None

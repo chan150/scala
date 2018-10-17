@@ -1,14 +1,22 @@
-/* NSC -- new Scala compiler
- * Copyright 2005-2013 LAMP/EPFL
- * @author  Paul Phillips
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
  */
 
 package scala
 package reflect.internal.util
 
-import scala.collection.{ mutable, immutable }
+import scala.collection.{immutable, mutable}
 import scala.annotation.tailrec
 import mutable.ListBuffer
+import scala.runtime.Statics.releaseFence
 
 /** Profiler driven changes.
  *  TODO - inlining doesn't work from here because of the bug that
@@ -58,6 +66,7 @@ trait Collections {
       tail = next
       rest = rest.tail
     }
+    releaseFence()
     head
   }
 
@@ -128,7 +137,9 @@ trait Collections {
         }
       }
     }
-    loop(null, xs, xs, ys)
+    val result = loop(null, xs, xs, ys)
+    releaseFence()
+    result
   }
 
   final def map3[A, B, C, D](xs1: List[A], xs2: List[B], xs3: List[C])(f: (A, B, C) => D): List[D] = {
@@ -286,6 +297,28 @@ trait Collections {
       ys3 = ys3.tail
     }
     true
+  }
+
+  final def partitionInto[A](xs: List[A], pred: A => Boolean, ayes: ListBuffer[A], nays: ListBuffer[A]): Unit = {
+    var ys = xs
+    while (!ys.isEmpty) {
+      val y = ys.head
+      if (pred(y)) ayes.addOne(y) else nays.addOne(y)
+      ys = ys.tail
+    }
+  }
+
+  final def bitSetByPredicate[A](xs: List[A])(pred: A => Boolean): mutable.BitSet = {
+    val bs = new mutable.BitSet()
+    var ys = xs
+    var i: Int = 0
+    while (! ys.isEmpty){
+      if (pred(ys.head))
+        bs.add(i)
+      ys = ys.tail
+      i += 1
+    }
+    bs
   }
 
   final def sequence[A](as: List[Option[A]]): Option[List[A]] = {

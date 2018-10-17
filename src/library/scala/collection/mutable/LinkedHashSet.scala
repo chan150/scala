@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala
 package collection
 package mutable
@@ -22,7 +34,8 @@ package mutable
  */
 class LinkedHashSet[A]
   extends AbstractSet[A]
-    with SetOps[A, LinkedHashSet, LinkedHashSet[A]] {
+    with SetOps[A, LinkedHashSet, LinkedHashSet[A]]
+    with StrictOptimizedIterableOps[A, LinkedHashSet, LinkedHashSet[A]] {
 
   override def iterableFactory: IterableFactory[LinkedHashSet] = LinkedHashSet
 
@@ -53,13 +66,9 @@ class LinkedHashSet[A]
       }
     }
 
-  def get(elem: A): Option[A] = {
-    val entry = table.findEntry(elem)
-    if (entry != null) Some(entry.key) else None
-  }
-
   override def size: Int = table.tableSize
-
+  override def knownSize: Int = size
+  override def isEmpty: Boolean = size == 0
   def contains(elem: A): Boolean = table.findEntry(elem) ne null
 
   def addOne(elem: A): this.type = {

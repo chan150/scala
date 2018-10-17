@@ -1,10 +1,23 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala
 package collection
 
-import java.lang.StringBuilder
+import java.lang.{StringBuilder => JStringBuilder}
 import java.util.NoSuchElementException
 
 import scala.collection.immutable.{ArraySeq, WrappedString}
+import scala.collection.mutable.StringBuilder
 import scala.math.{ScalaNumber, max, min}
 import scala.reflect.ClassTag
 import scala.util.matching.Regex
@@ -90,7 +103,7 @@ object StringOps {
       */
     def map(f: Char => Char): String = {
       val len = s.length
-      val sb = new StringBuilder(len)
+      val sb = new JStringBuilder(len)
       var i = 0
       while (i < len) {
         val x = s.charAt(i)
@@ -128,7 +141,7 @@ object StringOps {
       */
     def flatMap(f: Char => String): String = {
       val len = s.length
-      val sb = new StringBuilder
+      val sb = new JStringBuilder
       var i = 0
       while (i < len) {
         val x = s.charAt(i)
@@ -154,6 +167,8 @@ final class StringOps(private val s: String) extends AnyVal {
 
   /** Get the char at the specified index. */
   @`inline` def apply(i: Int): Char = s.charAt(i)
+
+  def lengthCompare(len: Int): Int = Integer.compare(s.length, len)
 
   /** Builds a new collection by applying a function to all chars of this String.
     *
@@ -216,7 +231,7 @@ final class StringOps(private val s: String) extends AnyVal {
     */
   def flatMap(f: Char => String): String = {
     val len = s.length
-    val sb = new StringBuilder
+    val sb = new JStringBuilder
     var i = 0
     while (i < len) {
       sb append f(s.charAt(i))
@@ -232,7 +247,7 @@ final class StringOps(private val s: String) extends AnyVal {
     *  @return       a new collection which contains all chars
     *                of this String followed by all elements of `suffix`.
     */
-  def concat[B >: Char](suffix: Iterable[B]): immutable.IndexedSeq[B] = {
+  def concat[B >: Char](suffix: IterableOnce[B]): immutable.IndexedSeq[B] = {
     val b = immutable.IndexedSeq.newBuilder[B]
     val k = suffix.knownSize
     b.sizeHint(s.length + (if(k >= 0) k else 16))
@@ -250,7 +265,7 @@ final class StringOps(private val s: String) extends AnyVal {
     */
   def concat(suffix: IterableOnce[Char]): String = {
     val k = suffix.knownSize
-    val sb = new StringBuilder(s.length + (if(k >= 0) k else 16))
+    val sb = new JStringBuilder(s.length + (if(k >= 0) k else 16))
     sb.append(s)
     for (ch <- suffix.iterator) sb.append(ch)
     sb.toString
@@ -308,7 +323,7 @@ final class StringOps(private val s: String) extends AnyVal {
   def padTo(len: Int, elem: Char): String = {
     val sLen = s.length
     if (sLen >= len) s else {
-      val sb = new StringBuilder(len)
+      val sb = new JStringBuilder(len)
       sb.append(s)
       // With JDK 11, this can written as:
       // sb.append(String.valueOf(elem).repeat(len - sLen))
@@ -335,13 +350,13 @@ final class StringOps(private val s: String) extends AnyVal {
 
   /** A copy of the String with an char prepended */
   def prepended(c: Char): String =
-    new StringBuilder(s.length + 1).append(c).append(s).toString
+    new JStringBuilder(s.length + 1).append(c).append(s).toString
 
   /** Alias for `prepended` */
   @`inline` def +: (c: Char): String = prepended(c)
 
   /** A copy of the String with all elements from a collection prepended */
-  def prependedAll[B >: Char](prefix: Iterable[B]): immutable.IndexedSeq[B] = {
+  def prependedAll[B >: Char](prefix: IterableOnce[B]): immutable.IndexedSeq[B] = {
     val b = immutable.IndexedSeq.newBuilder[B]
     val k = prefix.knownSize
     b.sizeHint(s.length + (if(k >= 0) k else 16))
@@ -351,7 +366,7 @@ final class StringOps(private val s: String) extends AnyVal {
   }
 
   /** Alias for `prependedAll` */
-  @`inline` def ++: [B >: Char] (prefix: Iterable[B]): immutable.IndexedSeq[B] = prependedAll(prefix)
+  @`inline` def ++: [B >: Char] (prefix: IterableOnce[B]): immutable.IndexedSeq[B] = prependedAll(prefix)
 
   /** A copy of the String with another String prepended */
   def prependedAll(prefix: String): String = prefix + s
@@ -373,17 +388,17 @@ final class StringOps(private val s: String) extends AnyVal {
 
   /** A copy of the String with an element appended */
   def appended(c: Char): String =
-    new StringBuilder(s.length + 1).append(s).append(c).toString
+    new JStringBuilder(s.length + 1).append(s).append(c).toString
 
   /** Alias for `appended` */
   @`inline` def :+ (c: Char): String = appended(c)
 
   /** A copy of the String with all elements from a collection appended */
-  @`inline` def appendedAll[B >: Char](suffix: Iterable[B]): immutable.IndexedSeq[B] =
+  @`inline` def appendedAll[B >: Char](suffix: IterableOnce[B]): immutable.IndexedSeq[B] =
     concat(suffix)
 
   /** Alias for `appendedAll` */
-  @`inline` def :++ [B >: Char](suffix: Iterable[B]): immutable.IndexedSeq[B] =
+  @`inline` def :++ [B >: Char](suffix: IterableOnce[B]): immutable.IndexedSeq[B] =
     concat(suffix)
 
   /** A copy of the String with another String appended */
@@ -451,7 +466,7 @@ final class StringOps(private val s: String) extends AnyVal {
     */
   def patch(from: Int, other: String, replaced: Int): String = {
     val len = s.length
-    val sb = new StringBuilder(len + other.size - replaced)
+    val sb = new JStringBuilder(len + other.size - replaced)
     val chunk1 = if(from > 0) min(from, len) else 0
     if(chunk1 > 0) sb.append(s, 0, chunk1)
     sb.append(other)
@@ -467,7 +482,7 @@ final class StringOps(private val s: String) extends AnyVal {
     *  @throws IndexOutOfBoundsException if `index` does not satisfy `0 <= index < length`.
     */
   def updated(index: Int, elem: Char): String = {
-    val sb = new StringBuilder(s.length).append(s)
+    val sb = new JStringBuilder(s.length).append(s)
     sb.setCharAt(index, elem)
     sb.toString
   }
@@ -491,8 +506,8 @@ final class StringOps(private val s: String) extends AnyVal {
     *               `end`. Inside, the string chars of this string are separated by
     *               the string `sep`.
     */
-  def mkString(start: String, sep: String, end: String): String =
-    addString(new mutable.StringBuilder(), start, sep, end).toString
+  final def mkString(start: String, sep: String, end: String): String =
+    addString(new StringBuilder(), start, sep, end).toString
 
   /** Displays all elements of this string in a string using a separator string.
     *
@@ -500,30 +515,39 @@ final class StringOps(private val s: String) extends AnyVal {
     *  @return      In the resulting string
     *               the chars of this string are separated by the string `sep`.
     */
-  def mkString(sep: String): String = mkString("", sep, "")
+  @inline final def mkString(sep: String): String =
+    if (sep.isEmpty || s.length < 2) s
+    else mkString("", sep, "")
 
   /** Returns this String */
-  def mkString: String = s
+  @inline final def mkString: String = s
 
   /** Appends this string to a string builder. */
-  def addString(b: mutable.StringBuilder): mutable.StringBuilder =
-    b.append(s)
+  @inline final def addString(b: StringBuilder): StringBuilder = b.append(s)
 
   /** Appends this string to a string builder using a separator string. */
-  def addString(b: mutable.StringBuilder, sep: String): mutable.StringBuilder =
+  @inline final def addString(b: StringBuilder, sep: String): StringBuilder =
     addString(b, "", sep, "")
 
   /** Appends this string to a string builder using start, end and separator strings. */
-  def addString(b: mutable.StringBuilder, start: String, sep: String, end: String): mutable.StringBuilder = {
-    b.append(start)
+  final def addString(b: StringBuilder, start: String, sep: String, end: String): StringBuilder = {
+    val jsb = b.underlying
+    if (start.length != 0) jsb.append(start)
     val len = s.length
-    var i = 0
-    while(i < len) {
-      if(i != 0) b.append(sep)
-      b.append(s.charAt(i))
-      i += 1
+    if (len != 0) {
+      if (sep.isEmpty) jsb.append(s)
+      else {
+        jsb.ensureCapacity(jsb.length + len + end.length + (len - 1) * sep.length)
+        jsb.append(s.charAt(0))
+        var i = 1
+        while (i < len) {
+          jsb.append(sep)
+          jsb.append(s.charAt(i))
+          i += 1
+        }
+      }
     }
-    b.append(end)
+    if (end.length != 0) jsb.append(end)
     b
   }
 
@@ -551,13 +575,17 @@ final class StringOps(private val s: String) extends AnyVal {
   /** Return the current string concatenated `n` times.
     */
   def *(n: Int): String = {
-    val sb = new StringBuilder(s.length * n)
-    var i = 0
-    while (i < n) {
-      sb.append(s)
-      i += 1
+    if (n <= 0) {
+      ""
+    } else {
+      val sb = new JStringBuilder(s.length * n)
+      var i = 0
+      while (i < n) {
+        sb.append(s)
+        i += 1
+      }
+      sb.toString
     }
-    sb.toString
   }
 
   @inline private[this] def isLineBreak(c: Char) = c == LF || c == FF
@@ -612,6 +640,14 @@ final class StringOps(private val s: String) extends AnyVal {
     *  end characters; i.e., apply `.stripLineEnd` to all lines
     *  returned by `linesWithSeparators`.
     */
+  def linesIterator: Iterator[String] =
+    linesWithSeparators map (_.stripLineEnd)
+
+  /** Return all lines in this string in an iterator, excluding trailing line
+    *  end characters; i.e., apply `.stripLineEnd` to all lines
+    *  returned by `linesWithSeparators`.
+    */
+  @deprecated("Use .linesIterator, because JDK 11 adds a `lines` method on String", "2.13.0")
   def lines: Iterator[String] =
     linesWithSeparators map (_.stripLineEnd)
 
@@ -652,7 +688,7 @@ final class StringOps(private val s: String) extends AnyVal {
     *  followed by `marginChar` from the line.
     */
   def stripMargin(marginChar: Char): String = {
-    val sb = new StringBuilder(s.length)
+    val sb = new JStringBuilder(s.length)
     for (line <- linesWithSeparators) {
       val len = line.length
       var index = 0
@@ -690,7 +726,7 @@ final class StringOps(private val s: String) extends AnyVal {
     * If the separator character is a surrogate character, only split on
     * matching surrogate characters if they are not part of a surrogate pair
     *
-    * The behaviour follows, and is implemented in terms of <a href="http://docs.oracle.com/javase/7/docs/api/java/lang/String.html#split%28java.lang.String%29">String.split(re: String)</a>
+    * The behaviour follows, and is implemented in terms of <a href="https://docs.oracle.com/javase/8/docs/api/java/lang/String.html#split-java.lang.String-">String.split(re: String)</a>
     *
     *
     * @example {{{
@@ -756,18 +792,18 @@ final class StringOps(private val s: String) extends AnyVal {
    * @throws java.lang.IllegalArgumentException  If the string does not contain a parsable `Boolean`.
    */
   def toBoolean: Boolean               = toBooleanImpl(s)
-  
+
   /**
    * Try to parse as a `Boolean`
-   * @return `Some(true)` if the string is "true" case insenitive,
-   * `Some(false)` if the string is "false" case insensitive, 
+   * @return `Some(true)` if the string is "true" case insensitive,
+   * `Some(false)` if the string is "false" case insensitive,
    * and `None` if the string is anything else
    * @throws java.lang.NullPointerException if the string is `null`
    */
   def toBooleanOption: Option[Boolean] = StringParsers.parseBool(s)
 
   /**
-    * Parse as a `Byte` (string must contain only decimal digits and optional leading `-`).
+    * Parse as a `Byte` (string must contain only decimal digits and optional leading `-` or `+`).
     * @throws java.lang.NumberFormatException  If the string does not contain a parsable `Byte`.
     */
   def toByte: Byte                     = java.lang.Byte.parseByte(s)
@@ -780,7 +816,7 @@ final class StringOps(private val s: String) extends AnyVal {
   def toByteOption: Option[Byte]       = StringParsers.parseByte(s)
 
   /**
-    * Parse as a `Short` (string must contain only decimal digits and optional leading `-`).
+    * Parse as a `Short` (string must contain only decimal digits and optional leading `-` or `+`).
     * @throws java.lang.NumberFormatException  If the string does not contain a parsable `Short`.
     */
   def toShort: Short                   = java.lang.Short.parseShort(s)
@@ -793,11 +829,11 @@ final class StringOps(private val s: String) extends AnyVal {
   def toShortOption: Option[Short]     = StringParsers.parseShort(s)
 
   /**
-    * Parse as an `Int` (string must contain only decimal digits and optional leading `-`).
+    * Parse as an `Int` (string must contain only decimal digits and optional leading `-` or `+`).
     * @throws java.lang.NumberFormatException  If the string does not contain a parsable `Int`.
     */
   def toInt: Int                       = java.lang.Integer.parseInt(s)
-  
+
   /**
    * Try to parse as an `Int`
    * @return `Some(value)` if the string contains a valid Int value, otherwise `None`
@@ -806,7 +842,7 @@ final class StringOps(private val s: String) extends AnyVal {
   def toIntOption: Option[Int]         = StringParsers.parseInt(s)
 
   /**
-    * Parse as a `Long` (string must contain only decimal digits and optional leading `-`).
+    * Parse as a `Long` (string must contain only decimal digits and optional leading `-` or `+`).
     * @throws java.lang.NumberFormatException  If the string does not contain a parsable `Long`.
     */
   def toLong: Long                     = java.lang.Long.parseLong(s)
@@ -852,8 +888,9 @@ final class StringOps(private val s: String) extends AnyVal {
     else if (s.equalsIgnoreCase("false")) false
     else throw new IllegalArgumentException("For input string: \""+s+"\"")
 
-  def toArray[B >: Char : ClassTag]: Array[B] =
-    s.toCharArray.asInstanceOf[Array[B]]
+  def toArray[B >: Char](implicit tag: ClassTag[B]): Array[B] =
+    if (tag == ClassTag.Char) s.toCharArray.asInstanceOf[Array[B]]
+    else new WrappedString(s).toArray[B]
 
   private[this] def unwrapArg(arg: Any): AnyRef = arg match {
     case x: ScalaNumber => x.underlying
@@ -1038,13 +1075,13 @@ final class StringOps(private val s: String) extends AnyVal {
   def indices: Range = Range(0, s.length)
 
   /** Iterator can be used only once */
-  def iterator(): Iterator[Char] = new StringIterator(s)
+  def iterator: Iterator[Char] = new StringIterator(s)
 
   /** Tests whether the string is not empty. */
   @`inline` def nonEmpty: Boolean = !s.isEmpty
 
   /** Returns new sequence with elements in reversed order. */
-  def reverse: String = new StringBuilder(s).reverse().toString
+  def reverse: String = new JStringBuilder(s).reverse().toString
 
   /** An iterator yielding chars in reversed order.
     *
@@ -1052,7 +1089,7 @@ final class StringOps(private val s: String) extends AnyVal {
     *
     *  @return  an iterator yielding the chars of this string in reversed order
     */
-  def reverseIterator(): Iterator[Char] = new ReverseIterator(s)
+  def reverseIterator: Iterator[Char] = new ReverseIterator(s)
 
   /** Creates a non-strict filter of this string.
     *
@@ -1105,12 +1142,12 @@ final class StringOps(private val s: String) extends AnyVal {
 
   // A helper for tails and inits.
   private[this] def iterateUntilEmpty(f: String => String): Iterator[String] =
-    Iterator.iterate(s)(f).takeWhile(x => !x.isEmpty) ++ Iterator("")
+    Iterator.iterate(s)(f).takeWhile(x => !x.isEmpty) ++ Iterator.single("")
 
   /** Selects all chars of this string which satisfy a predicate. */
   def filter(pred: Char => Boolean): String = {
     val len = s.length
-    val sb = new StringBuilder(len)
+    val sb = new JStringBuilder(len)
     var i = 0
     while (i < len) {
       val x = s.charAt(i)
@@ -1124,16 +1161,14 @@ final class StringOps(private val s: String) extends AnyVal {
   @`inline` def filterNot(pred: Char => Boolean): String = filter(c => !pred(c))
 
   /** Copy chars of this string to an array.
-    * Fills the given array `xs` starting at index `start` with at most `len` chars.
-    * Copying will stop once either the entire string has been copied,
-    * or the end of the array is reached or `len` chars have been copied.
+    * Fills the given array `xs` starting at index 0.
+    * Copying will stop once either the entire string has been copied
+    * or the end of the array is reached
     *
     *  @param  xs     the array to fill.
-    *  @param  start  the starting index.
-    *  @param  len    the maximal number of elements to copy.
     */
-  def copyToArray(xs: Array[Char], start: Int, len: Int): Unit =
-    s.getChars(0, min(min(s.length, len), xs.length-start), xs, start)
+  @`inline` def copyToArray(xs: Array[Char]): Int =
+    copyToArray(xs, 0, Int.MaxValue)
 
   /** Copy chars of this string to an array.
     * Fills the given array `xs` starting at index `start`.
@@ -1142,10 +1177,26 @@ final class StringOps(private val s: String) extends AnyVal {
     *
     *  @param  xs     the array to fill.
     *  @param  start  the starting index.
+    */
+  @`inline` def copyToArray(xs: Array[Char], start: Int): Int =
+    copyToArray(xs, start, Int.MaxValue)
+
+  /** Copy chars of this string to an array.
+    * Fills the given array `xs` starting at index `start` with at most `len` chars.
+    * Copying will stop once either the entire string has been copied,
+    * or the end of the array is reached or `len` chars have been copied.
+    *
+    *  @param  xs     the array to fill.
+    *  @param  start  the starting index.
     *  @param  len    the maximal number of elements to copy.
     */
-  @`inline` def copyToArray(xs: Array[Char], start: Int): Unit =
-    copyToArray(xs, start, Int.MaxValue)
+  def copyToArray(xs: Array[Char], start: Int, len: Int): Int = {
+    val copied = IterableOnce.elemsToCopyToArray(s.length, xs.length, start, len)
+    if (copied > 0) {
+      s.getChars(0, copied, xs, start)
+    }
+    copied
+  }
 
   /** Finds index of the first char satisfying some predicate after or at some start index.
     *
@@ -1247,7 +1298,7 @@ final class StringOps(private val s: String) extends AnyVal {
 
   /** A pair of, first, all chars that satisfy predicate `p` and, second, all chars that do not. */
   def partition(p: Char => Boolean): (String, String) = {
-    val res1, res2 = new StringBuilder
+    val res1, res2 = new JStringBuilder
     var i = 0
     val len = s.length
     while(i < len) {
@@ -1257,6 +1308,25 @@ final class StringOps(private val s: String) extends AnyVal {
     }
     (res1.toString, res2.toString)
   }
+
+  /** Analogous to `zip` except that the elements in each collection are not consumed until a strict operation is
+    * invoked on the returned `LazyZip2` decorator.
+    *
+    * Calls to `lazyZip` can be chained to support higher arities (up to 4) without incurring the expense of
+    * constructing and deconstructing intermediary tuples.
+    *
+    * {{{
+    *    val xs = List(1, 2, 3)
+    *    val res = (xs lazyZip xs lazyZip xs lazyZip xs).map((a, b, c, d) => a + b + c + d)
+    *    // res == List(4, 8, 12)
+    * }}}
+    *
+    * @param that the iterable providing the second element of each eventual pair
+    * @tparam B   the type of the second element in each eventual pair
+    * @return a decorator `LazyZip2` that allows strict operations to be performed on the lazily evaluated pairs
+    *         or chained calls to `lazyZip`. Implicit conversion to `Iterable[(A, B)]` is also supported.
+    */
+  def lazyZip[B](that: Iterable[B]): LazyZip2[Char, B, String] = new LazyZip2(s, new WrappedString(s), that)
 
 
   /* ************************************************************************************************************
@@ -1275,8 +1345,8 @@ final class StringOps(private val s: String) extends AnyVal {
     *                ''n'' times in `that`, then the first ''n'' occurrences of `x` will not form
     *                part of the result, but any following occurrences will.
     */
-  @deprecated("Use `new WrappedString(s).diff(...).self` instead of `s.diff(...)`", "2.13.0")
-  def diff(that: Seq[_ >: Char]): String = new WrappedString(s).diff(that).self
+  @deprecated("Use `s.toSeq.diff(...).unwrap` instead of `s.diff(...)`", "2.13.0")
+  def diff(that: Seq[_ >: Char]): String = new WrappedString(s).diff(that).unwrap
 
   /** Computes the multiset intersection between this string and another sequence.
     *
@@ -1287,12 +1357,12 @@ final class StringOps(private val s: String) extends AnyVal {
     *                ''n'' times in `that`, then the first ''n'' occurrences of `x` will be retained
     *                in the result, but any following occurrences will be omitted.
     */
-  @deprecated("Use `new WrappedString(s).intersect(...).self` instead of `s.intersect(...)`", "2.13.0")
-  def intersect(that: Seq[_ >: Char]): String = new WrappedString(s).intersect(that).self
+  @deprecated("Use `s.toSeq.intersect(...).unwrap` instead of `s.intersect(...)`", "2.13.0")
+  def intersect(that: Seq[_ >: Char]): String = new WrappedString(s).intersect(that).unwrap
 
   /** Selects all distinct chars of this string ignoring the duplicates. */
-  @deprecated("Use `new WrappedString(s).distinct.self` instead of `s.distinct`", "2.13.0")
-  def distinct: String = new WrappedString(s).distinct.self
+  @deprecated("Use `s.toSeq.distinct.unwrap` instead of `s.distinct`", "2.13.0")
+  def distinct: String = new WrappedString(s).distinct.unwrap
 
   /** Selects all distinct chars of this string ignoring the duplicates as determined by `==` after applying
     * the transforming function `f`.
@@ -1301,8 +1371,8 @@ final class StringOps(private val s: String) extends AnyVal {
     * @tparam B the type of the elements after being transformed by `f`
     * @return a new string consisting of all the chars of this string without duplicates.
     */
-  @deprecated("Use `new WrappedString(s).distinctBy(...).self` instead of `s.distinctBy(...)`", "2.13.0")
-  def distinctBy[B](f: Char => B): String = new WrappedString(s).distinctBy(f).self
+  @deprecated("Use `s.toSeq.distinctBy(...).unwrap` instead of `s.distinctBy(...)`", "2.13.0")
+  def distinctBy[B](f: Char => B): String = new WrappedString(s).distinctBy(f).unwrap
 
   /** Sorts the characters of this string according to an Ordering.
     *
@@ -1315,8 +1385,8 @@ final class StringOps(private val s: String) extends AnyVal {
     *  @return     a string consisting of the chars of this string
     *              sorted according to the ordering `ord`.
     */
-  @deprecated("Use `new WrappedString(s).sorted.self` instead of `s.sorted`", "2.13.0")
-  def sorted[B >: Char](implicit ord: Ordering[B]): String = new WrappedString(s).sorted(ord).self
+  @deprecated("Use `s.toSeq.sorted.unwrap` instead of `s.sorted`", "2.13.0")
+  def sorted[B >: Char](implicit ord: Ordering[B]): String = new WrappedString(s).sorted(ord).unwrap
 
   /** Sorts this string according to a comparison function.
     *
@@ -1329,8 +1399,8 @@ final class StringOps(private val s: String) extends AnyVal {
     *  @return     a string consisting of the elements of this string
     *              sorted according to the comparison function `lt`.
     */
-  @deprecated("Use `new WrappedString(s).sortWith(...).self` instead of `s.sortWith(...)`", "2.13.0")
-  def sortWith(lt: (Char, Char) => Boolean): String = new WrappedString(s).sortWith(lt).self
+  @deprecated("Use `s.toSeq.sortWith(...).unwrap` instead of `s.sortWith(...)`", "2.13.0")
+  def sortWith(lt: (Char, Char) => Boolean): String = new WrappedString(s).sortWith(lt).unwrap
 
   /** Sorts this string according to the Ordering which results from transforming
     * an implicitly given Ordering with a transformation function.
@@ -1348,8 +1418,8 @@ final class StringOps(private val s: String) extends AnyVal {
     *           sorted according to the ordering where `x < y` if
     *           `ord.lt(f(x), f(y))`.
     */
-  @deprecated("Use `new WrappedString(s).sortBy(...).self` instead of `s.sortBy(...)`", "2.13.0")
-  def sortBy[B](f: Char => B)(implicit ord: Ordering[B]): String = new WrappedString(s).sortBy(f)(ord).self
+  @deprecated("Use `s.toSeq.sortBy(...).unwrap` instead of `s.sortBy(...)`", "2.13.0")
+  def sortBy[B](f: Char => B)(implicit ord: Ordering[B]): String = new WrappedString(s).sortBy(f)(ord).unwrap
 
   /** Partitions this string into a map of strings according to some discriminator function.
     *
@@ -1363,8 +1433,8 @@ final class StringOps(private val s: String) extends AnyVal {
     *               for which `f(x)` equals `k`.
     *
     */
-  @deprecated("Use `new WrappedString(s).groupBy(...).mapValues(_.self)` instead of `s.groupBy(...)`", "2.13.0")
-  def groupBy[K](f: Char => K): immutable.Map[K, String] = new WrappedString(s).groupBy(f).mapValues(_.self).toMap
+  @deprecated("Use `s.toSeq.groupBy(...).view.mapValues(_.unwrap)` instead of `s.groupBy(...)`", "2.13.0")
+  def groupBy[K](f: Char => K): immutable.Map[K, String] = new WrappedString(s).groupBy(f).view.mapValues(_.unwrap).toMap
 
   /** Groups chars in fixed size blocks by passing a "sliding window"
     *  over them (as opposed to partitioning them, as is done in grouped.)
@@ -1376,8 +1446,8 @@ final class StringOps(private val s: String) extends AnyVal {
     *          last element (which may be the only element) will be truncated
     *          if there are fewer than `size` chars remaining to be grouped.
     */
-  @deprecated("Use `new WrappedString(s).sliding(...).map(_.self)` instead of `s.sliding(...)`", "2.13.0")
-  def sliding(size: Int, step: Int = 1): Iterator[String] = new WrappedString(s).sliding(size, step).map(_.self)
+  @deprecated("Use `s.toSeq.sliding(...).map(_.unwrap)` instead of `s.sliding(...)`", "2.13.0")
+  def sliding(size: Int, step: Int = 1): Iterator[String] = new WrappedString(s).sliding(size, step).map(_.unwrap)
 
   /** Iterates over combinations.  A _combination_ of length `n` is a subsequence of
     *  the original string, with the chars taken in order.  Thus, `"xy"` and `"yy"`
@@ -1392,16 +1462,16 @@ final class StringOps(private val s: String) extends AnyVal {
     *  @return   An Iterator which traverses the possible n-element combinations of this string.
     *  @example  `"abbbc".combinations(2) = Iterator(ab, ac, bb, bc)`
     */
-  @deprecated("Use `new WrappedString(s).combinations(...).map(_.self)` instead of `s.combinations(...)`", "2.13.0")
-  def combinations(n: Int): Iterator[String] = new WrappedString(s).combinations(n).map(_.self)
+  @deprecated("Use `s.toSeq.combinations(...).map(_.unwrap)` instead of `s.combinations(...)`", "2.13.0")
+  def combinations(n: Int): Iterator[String] = new WrappedString(s).combinations(n).map(_.unwrap)
 
   /** Iterates over distinct permutations.
     *
     *  @return   An Iterator which traverses the distinct permutations of this string.
     *  @example  `"abb".permutations = Iterator(abb, bab, bba)`
     */
-  @deprecated("Use `new WrappedString(s).permutations(...).map(_.self)` instead of `s.permutations(...)`", "2.13.0")
-  def permutations: Iterator[String] = new WrappedString(s).permutations.map(_.self)
+  @deprecated("Use `s.toSeq.permutations(...).map(_.unwrap)` instead of `s.permutations(...)`", "2.13.0")
+  def permutations: Iterator[String] = new WrappedString(s).permutations.map(_.unwrap)
 }
 
 case class StringView(s: String) extends AbstractIndexedSeqView[Char] {

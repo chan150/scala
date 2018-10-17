@@ -1,6 +1,13 @@
-/* NSC -- new Scala compiler
- * Copyright 2005-2014 LAMP/EPFL, Typesafe Inc.
- * @author  Adriaan Moors
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
  */
 
 package scala
@@ -106,8 +113,12 @@ trait Reporting extends scala.reflect.internal.Reporting { self: ast.Positions w
       reportedFeature += featureTrait
 
       val msg = s"$featureDesc $req be enabled\nby making the implicit value $fqname visible.$explain" replace ("#", construct)
-      if (required) reporter.error(pos, msg)
-      else featureWarning(pos, msg)
+      // don't error on postfix in pre-0.13.18 xsbt/Compat.scala
+      def isSbtCompat =
+        (featureName == "postfixOps" && pos.source.path.endsWith("/xsbt/Compat.scala") && Thread.currentThread.getStackTrace.exists(_.getClassName.startsWith("sbt.")))
+      if (required && !isSbtCompat) {
+        reporter.error(pos, msg)
+      } else featureWarning(pos, msg)
     }
 
     /** Has any macro expansion used a fallback during this run? */

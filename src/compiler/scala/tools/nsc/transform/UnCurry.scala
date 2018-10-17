@@ -1,6 +1,13 @@
-/* NSC -- new Scala compiler
- * Copyright 2005-2013 LAMP/EPFL
- * @author
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
  */
 
 package scala
@@ -247,7 +254,7 @@ abstract class UnCurry extends InfoTransform
           ArrayValue(TypeTree(elemtp), ts) setType arrayType(elemtp)
 
         // when calling into scala varargs, make sure it's a sequence.
-        def arrayToSequence(tree: Tree, elemtp: Type) = {
+        def arrayToSequence(tree: Tree, elemtp: Type, copy: Boolean) = {
           exitingUncurry {
             localTyper.typedPos(pos) {
               val pt = arrayType(elemtp)
@@ -255,7 +262,12 @@ abstract class UnCurry extends InfoTransform
                 if (tree.tpe <:< pt) tree
                 else gen.mkCastArray(tree, elemtp, pt)
 
-              gen.mkWrapVarargsArray(adaptedTree, elemtp)
+              if(copy) {
+                currentRun.reporting.deprecationWarning(tree.pos, NoSymbol,
+                  "Passing an explicit array value to a Scala varargs method is deprecated (since 2.13.0) and will result in a defensive copy; "+
+                    "Use the more efficient non-copying ArraySeq.unsafeWrapArray or an explicit toIndexedSeq call", "2.13.0")
+                gen.mkMethodCall(PredefModule, nme.copyArrayToImmutableIndexedSeq, List(elemtp), List(adaptedTree))
+              } else gen.mkWrapVarargsArray(adaptedTree, elemtp)
             }
           }
         }
@@ -269,7 +281,7 @@ abstract class UnCurry extends InfoTransform
             // Don't want bottom types getting any further than this (scala/bug#4024)
             if (tp.typeSymbol.isBottomClass) getClassTag(AnyTpe)
             else if (!tag.isEmpty) tag
-            else if (tp.bounds.hi ne tp) getClassTag(tp.bounds.hi)
+            else if (tp.upperBound ne tp) getClassTag(tp.upperBound)
             else localTyper.TyperErrorGen.MissingClassTagError(tree, tp)
           }
           def traversableClassTag(tpe: Type): Tree = {
@@ -299,13 +311,13 @@ abstract class UnCurry extends InfoTransform
               else sequenceToArray(tree)
             else
               if (tree.tpe.typeSymbol isSubClass SeqClass) tree
-              else arrayToSequence(tree, varargsElemType)
+              else arrayToSequence(tree, varargsElemType, copy = isNewCollections) // existing array, make a defensive copy
           }
           else {
             def mkArray = mkArrayValue(args drop (formals.length - 1), varargsElemType)
             if (javaStyleVarArgs) mkArray
             else if (args.isEmpty) gen.mkNil  // avoid needlessly double-wrapping an empty argument list
-            else arrayToSequence(mkArray, varargsElemType)
+            else arrayToSequence(mkArray, varargsElemType, copy = false) // fresh array, no need to copy
           }
 
         exitingUncurry {

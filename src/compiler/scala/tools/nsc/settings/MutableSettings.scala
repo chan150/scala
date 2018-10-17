@@ -1,7 +1,15 @@
-/* NSC -- new Scala compiler
- * Copyright 2005-2013 LAMP/EPFL
- * @author  Martin Odersky
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
  */
+
 // $Id$
 
 package scala.tools
@@ -19,8 +27,7 @@ import scala.reflect.{ ClassTag, classTag }
 class MutableSettings(val errorFn: String => Unit)
               extends scala.reflect.internal.settings.MutableSettings
                  with AbsSettings
-                 with ScalaSettings
-                 with Mutable {
+                 with ScalaSettings {
   type ResultOfTryToSet = List[String]
 
   def withErrorFn(errorFn: String => Unit): MutableSettings = {
@@ -357,19 +364,19 @@ class MutableSettings(val errorFn: String => Unit)
   /** A base class for settings of all types.
    *  Subclasses each define a `value` field of the appropriate type.
    */
-  abstract class Setting(val name: String, val helpDescription: String) extends AbsSetting with SettingValue with Mutable {
+  abstract class Setting(val name: String, val helpDescription: String) extends AbsSetting with SettingValue {
     /** Will be called after this Setting is set for any extra work. */
-    private var _postSetHook: this.type => Unit = (x: this.type) => ()
+    private[this] var _postSetHook: this.type => Unit = (x: this.type) => ()
     override def postSetHook(): Unit = _postSetHook(this)
     def withPostSetHook(f: this.type => Unit): this.type = { _postSetHook = f ; this }
 
     /** The syntax defining this setting in a help string */
-    private var _helpSyntax = name
+    private[this] var _helpSyntax = name
     override def helpSyntax: String = _helpSyntax
     def withHelpSyntax(s: String): this.type    = { _helpSyntax = s ; this }
 
     /** Abbreviations for this setting */
-    private var _abbreviations: List[String] = Nil
+    private[this] var _abbreviations: List[String] = Nil
     override def abbreviations = _abbreviations
     def withAbbreviation(s: String): this.type  = { _abbreviations ++= List(s) ; this }
 
@@ -378,7 +385,7 @@ class MutableSettings(val errorFn: String => Unit)
     override def dependencies = dependency.toList
     def dependsOn(s: Setting, value: String): this.type = { dependency = Some((s, value)); this }
 
-    private var _deprecationMessage: Option[String] = None
+    private[this] var _deprecationMessage: Option[String] = None
     override def deprecationMessage = _deprecationMessage
     def withDeprecationMessage(msg: String): this.type = { _deprecationMessage = Some(msg) ; this }
   }
@@ -525,7 +532,7 @@ class MutableSettings(val errorFn: String => Unit)
     name: String,
     val arg: String,
     descr: String,
-    initial: ScalaVersion,
+    val initial: ScalaVersion,
     default: Option[ScalaVersion])
   extends Setting(name, descr) {
     type T = ScalaVersion
@@ -626,7 +633,7 @@ class MutableSettings(val errorFn: String => Unit)
    */
   class MultiChoiceSetting[E <: MultiChoiceEnumeration] private[nsc](
     name: String,
-    helpArg: String,
+    val helpArg: String,
     descr: String,
     val domain: E,
     val default: Option[List[String]]
@@ -833,7 +840,7 @@ class MutableSettings(val errorFn: String => Unit)
    */
   class ChoiceSetting private[nsc](
     name: String,
-    helpArg: String,
+    val helpArg: String,
     descr: String,
     override val choices: List[String],
     val default: String,
@@ -888,7 +895,7 @@ class MutableSettings(val errorFn: String => Unit)
   class PhasesSetting private[nsc](
     name: String,
     descr: String,
-    default: String
+    val default: String
   ) extends Setting(name, mkPhasesHelp(descr, default)) with Clearable {
     private[nsc] def this(name: String, descr: String) = this(name, descr, "")
 

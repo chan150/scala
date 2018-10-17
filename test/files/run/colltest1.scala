@@ -188,7 +188,7 @@ object Test extends App {
     assert(m.keySet == m.keysIterator.toList.toSet, s"${m.keySet.toList}!=${m.keysIterator.toList.toSet}")
     val m1 = empty ++ m
     val ks = m.keySet
-    val mm = m.filterKeys(k => !ks(k))
+    val mm = m.view.filterKeys(k => !ks(k))
     assert(mm.isEmpty, mm)
     def m3 = empty ++ m1
     assert(m1 == m3)
@@ -200,7 +200,7 @@ object Test extends App {
   def mutableMapTest(empty: => mutable.Map[String, String]) = {
     mapTest(empty)
     val m1 = empty ++ (('A' to 'Z') map (_.toString) map (x => (x, x)))
-    val m2 = m1 retain ((k, v) => k == "N")
+    val m2 = m1 filterInPlace ((k, v) => k == "N")
     assert(m2.size == 1, m2)
   }
 

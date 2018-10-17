@@ -49,48 +49,65 @@ class HashMapTest {
   }
 
   @Test
-  def mapInPlace_addOneToAll(): Unit = {
-    val hm = mutable.HashMap[Int, Int]()
-    hm.put(1, 1)
-    hm.put(2, 2)
-    hm.put(3, 3)
-    hm.mapInPlace{ case (k, v) => (k, v + 1) }
-    assertEquals(List((1, 2), (2, 3), (3, 4)), hm.toList.sortBy(_._1))
+  def customGet(): Unit = {
+    val gotItAll = new mutable.HashMap[String, String] {
+      override def get(key: String): Option[String] = Some(key)
+    }
+    assertEquals("a", gotItAll.getOrElse("a", "b"))
+    assertEquals("a", gotItAll.getOrElseUpdate("a", "b"))
   }
-
   @Test
-  def mapInPlace_reducedToOneKey(): Unit = {
-    val hm = mutable.HashMap[Int, Int]()
-    hm.put(1, 1)
-    hm.put(2, 2)
-    hm.put(3, 3)
-    hm.mapInPlace{ case (_, v) => (1, v + 1) }
-    assert(hm.size == 1)
-    assert(hm.toList.head._2 > 1)
-  }
+  def testWithDefaultValue: Unit = {
+    val m1 = mutable.HashMap(1 -> "a", 2 -> "b")
+    val m2 = m1.withDefaultValue("")
 
+    assertEquals(m2(1), "a")
+    assertEquals(m2(3), "")
+
+    m2 += (3 -> "c")
+    assertEquals(m2(3), "c")
+    assertEquals(m2(4), "")
+
+    m2 ++= List(4 -> "d", 5 -> "e", 6 -> "f")
+    assertEquals(m2(3), "c")
+    assertEquals(m2(4), "d")
+    assertEquals(m2(5), "e")
+    assertEquals(m2(6), "f")
+    assertEquals(m2(7), "")
+
+    m2 --= List(3, 4, 5)
+    assertEquals(m2(3), "")
+    assertEquals(m2(4), "")
+    assertEquals(m2(5), "")
+    assertEquals(m2(6), "f")
+    assertEquals(m2(7), "")
+
+    val m3 = m2 ++ List(3 -> "333")
+    assertEquals(m2(3), "")
+    assertEquals(m3(3), "333")
+  }
   @Test
-  def flatMapInPlace(): Unit = {
-    val hm = mutable.HashMap(1 -> 1, 2 -> 2)
-    val fmip = hm.flatMapInPlace { case (k, v) => HashMap(k * 2 -> v * 2) }
-    assert(fmip.size == 2)
-    assert(fmip == HashMap(2 -> 2, 4 -> 4))
-  }
+  def testWithDefault: Unit = {
+    val m1 = mutable.HashMap(1 -> "a", 2 -> "b")
 
-  @Test
-  def flatMapInPlace_reducedToOneKey(): Unit = {
-    val hm = mutable.HashMap(1 -> 1, 2 -> 2, 3->3)
-    val fmip = hm.flatMapInPlace { case (_, v) => HashMap(1 -> v) }
-    assert(fmip.size == 1)
-    assert(fmip.contains(1))
-    assert(fmip(1) == 1 || fmip(1) == 2 || fmip(1) == 3)
-  }
+    val m2: mutable.Map.WithDefault[Int, String] = m1.withDefault(i => (i + 1).toString)
+    m2.update(1, "aa")
+    m2.update(100, "bb")
+    m2.addAll(List(500 -> "c", 501 -> "c"))
 
-  @Test // From collection/strawman #509
-  def flatMapInPlace_dropElements(): Unit = {
-    val hm = mutable.HashMap(1 -> 1)
-    val empty = mutable.HashMap.empty[Int, Int]
-    val fmip = hm.flatMapInPlace(_ => empty)
-    assert(fmip.size == 0)
+    assertEquals(m2(1), "aa")
+    assertEquals(m2(2), "b")
+    assertEquals(m2(3), "4")
+    assertEquals(m2(4), "5")
+    assertEquals(m2(500), "c")
+    assertEquals(m2(501), "c")
+    assertEquals(m2(502), "503")
+
+    val m3: mutable.Map.WithDefault[Int, String] = m2 - 1
+    assertEquals(m3(1), "2")
+
+    val m4: mutable.Map.WithDefault[Int, String] = m3 -- List(2, 100)
+    assertEquals(m4(2), "3")
+    assertEquals(m4(100), "101")
   }
 }

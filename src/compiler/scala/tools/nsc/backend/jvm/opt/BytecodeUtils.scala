@@ -1,6 +1,13 @@
-/* NSC -- new Scala compiler
- * Copyright 2005-2014 LAMP/EPFL
- * @author  Martin Odersky
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
  */
 
 package scala.tools.nsc
@@ -119,7 +126,12 @@ object BytecodeUtils {
 
   def isNativeMethod(methodNode: MethodNode): Boolean = (methodNode.access & ACC_NATIVE) != 0
 
-  def hasCallerSensitiveAnnotation(methodNode: MethodNode): Boolean = methodNode.visibleAnnotations != null && methodNode.visibleAnnotations.asScala.exists(_.desc == "Lsun/reflect/CallerSensitive;")
+  // cross-jdk
+  def hasCallerSensitiveAnnotation(methodNode: MethodNode): Boolean =
+    methodNode.visibleAnnotations != null &&
+    methodNode.visibleAnnotations.stream.filter(ann =>
+      ann.desc == "Lsun/reflect/CallerSensitive;" || ann.desc == "Ljdk/internal/reflect/CallerSensitive;"
+    ).findFirst.isPresent
 
   def isFinalClass(classNode: ClassNode): Boolean = (classNode.access & ACC_FINAL) != 0
 

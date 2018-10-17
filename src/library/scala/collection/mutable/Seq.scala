@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala.collection.mutable
 
 import scala.collection.SeqFactory
@@ -24,8 +36,7 @@ object Seq extends SeqFactory.Delegate[Seq](ArrayBuffer)
   * @define Coll `mutable.Seq`
   */
 trait SeqOps[A, +CC[_], +C <: AnyRef]
-  extends IterableOps[A, CC, C]
-    with collection.SeqOps[A, CC, C]
+  extends collection.SeqOps[A, CC, C]
     with Cloneable[C] {
 
   override def clone(): C = {
@@ -42,11 +53,9 @@ trait SeqOps[A, +CC[_], +C <: AnyRef]
     */
   @throws[IndexOutOfBoundsException]
   def update(idx: Int, elem: A): Unit
-}
 
-trait IndexedOptimizedSeq[A] extends Seq[A] {
-
-  def mapInPlace(f: A => A): this.type = {
+  @deprecated("Use `mapInPlace` on an `IndexedSeq` instead", "2.13.0")
+  @`inline`final def transform(f: A => A): this.type = {
     var i = 0
     val siz = size
     while (i < siz) { this(i) = f(this(i)); i += 1 }

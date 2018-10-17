@@ -1,5 +1,13 @@
-/* NSC -- new Scala compiler
- * Copyright 2005-2017 LAMP/EPFL and Lightbend, Inc
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
  */
 
 package scala.tools.nsc.interpreter.shell
@@ -85,7 +93,13 @@ trait ShellConfig {
 
   // Prompt for continued input, will be right-adjusted to width of the primary prompt
   val continueString = Prop[String]("scala.repl.continue").option getOrElse "| "
-  val welcomeString  = Prop[String]("scala.repl.welcome").option getOrElse shellWelcomeString
+
+  // What to display at REPL startup.
+  val welcomeString  = Prop[String]("scala.repl.welcome").option match {
+    case Some("banner") => shellBannerString
+    case Some(text)     => text
+    case _              => shellWelcomeString
+  }
 
   val pasteDelimiter = Prop[String]("scala.repl.here")
 

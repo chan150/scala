@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala.collection
 
 
@@ -11,6 +23,11 @@ trait SortedOps[A, +C] {
 
   /** Returns the last key of the collection. */
   def lastKey: A
+
+  /** Comparison function that orders keys. */
+  @deprecated("Use ordering.compare instead", "2.13.0")
+  @deprecatedOverriding("Use ordering.compare instead", "2.13.0")
+  @inline def compare(k0: A, k1: A): Int = ordering.compare(k0, k1)
 
   /** Creates a ranged projection of this collection. Any mutations in the
     *  ranged projection will update this collection and vice versa.

@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala
 package collection
 package immutable
@@ -22,7 +34,10 @@ sealed abstract class BitSet
     with collection.BitSet
     with SortedSetOps[Int, SortedSet, BitSet]
     with collection.BitSetOps[BitSet]
-    with StrictOptimizedIterableOps[Int, Set, BitSet] {
+    with StrictOptimizedIterableOps[Int, Set, BitSet]
+    with StrictOptimizedSortedSetOps[Int, SortedSet, BitSet] {
+
+  override def unsorted: Set[Int] = this
 
   def bitSetFactory = BitSet
 
@@ -49,20 +64,20 @@ sealed abstract class BitSet
     */
   protected def updateWord(idx: Int, w: Long): BitSet
 
-  override def map(f: Int => Int): BitSet = super[BitSet].map(f)
+  override def map(f: Int => Int): BitSet = strictOptimizedMap(newSpecificBuilder, f)
   override def map[B](f: Int => B)(implicit @implicitNotFound(collection.BitSet.ordMsg) ev: Ordering[B]): SortedSet[B] =
-    super[SortedSetOps].map(f)
+    super[StrictOptimizedSortedSetOps].map(f)
 
-  override def flatMap(f: Int => IterableOnce[Int]): BitSet = super[BitSet].flatMap(f)
+  override def flatMap(f: Int => IterableOnce[Int]): BitSet = strictOptimizedFlatMap(newSpecificBuilder, f)
   override def flatMap[B](f: Int => IterableOnce[B])(implicit @implicitNotFound(collection.BitSet.ordMsg) ev: Ordering[B]): SortedSet[B] =
-    super[SortedSetOps].flatMap(f)
+    super[StrictOptimizedSortedSetOps].flatMap(f)
 
-  override def collect(pf: PartialFunction[Int, Int]): BitSet = super[BitSet].collect(pf)
+  override def collect(pf: PartialFunction[Int, Int]): BitSet = strictOptimizedCollect(newSpecificBuilder, pf)
   override def collect[B](pf: scala.PartialFunction[Int, B])(implicit @implicitNotFound(collection.BitSet.ordMsg) ev: Ordering[B]): SortedSet[B] =
-    super[SortedSetOps].collect(pf)
+    super[StrictOptimizedSortedSetOps].collect(pf)
 
   // necessary for disambiguation
-  override def zip[B](that: scala.Iterable[B])(implicit @implicitNotFound(collection.BitSet.zipOrdMsg) ev: Ordering[(Int, B)]): SortedSet[(Int, B)] =
+  override def zip[B](that: scala.IterableOnce[B])(implicit @implicitNotFound(collection.BitSet.zipOrdMsg) ev: Ordering[(Int, B)]): SortedSet[(Int, B)] =
     super.zip(that)
 
   override protected[this] def writeReplace(): AnyRef = new BitSet.SerializationProxy(this)

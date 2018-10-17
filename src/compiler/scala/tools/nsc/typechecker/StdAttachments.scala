@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala.tools.nsc
 package typechecker
 
@@ -20,7 +32,7 @@ trait StdAttachments {
 
   /** Loads underlying MacroExpanderAttachment from a macro expandee or returns a default value for that attachment.
    */
- def macroExpanderAttachment(tree: Tree): MacroExpanderAttachment =
+  def macroExpanderAttachment(tree: Tree): MacroExpanderAttachment =
     tree.attachments.get[MacroExpanderAttachment] getOrElse {
       tree match {
         case Apply(fn, _) if tree.isInstanceOf[ApplyToImplicitArgs] => macroExpanderAttachment(fn)

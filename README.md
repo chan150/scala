@@ -125,7 +125,7 @@ Once you've started an `sbt` session you can run one of the core commands:
 If a command results in an error message like `a module is not authorized to depend on
 itself`, it may be that a global SBT plugin (such as [Ensime](http://ensime.org/)) is
 resulting in a cyclical dependency. Try disabling global SBT plugins (perhaps by
-temporarily commenting them out in `~/.sbt/0.13/plugins/plugins.sbt`).
+temporarily commenting them out in `~/.sbt/1.0/plugins/plugins.sbt`).
 
 #### Sandbox
 
@@ -138,8 +138,6 @@ Note that sbt's incremental compilation is often too coarse for the Scala compil
 codebase and re-compiles too many files, resulting in long build times (check
 [sbt#1104](https://github.com/sbt/sbt/issues/1104) for progress on that front). In the
 meantime you can:
-  - Enable "Ant mode" in which sbt only re-compiles source files that were modified.
-    Create a file `local.sbt` containing the line `antStyle := true`.
   - Use IntelliJ IDEA for incremental compiles (see [IDE Setup](#ide-setup) below) - its
     incremental compiler is a bit less conservative, but usually correct.
 
@@ -198,6 +196,8 @@ You may also want to check out the following resources:
   - [Scala documentation site](http://docs.scala-lang.org)
 
 # Scala CI
+
+[![Build Status](https://travis-ci.org/scala/scala.svg?branch=2.13.x)](https://travis-ci.org/scala/scala)
 
 Once you submit a PR your commits will be automatically tested by the Scala CI.
 

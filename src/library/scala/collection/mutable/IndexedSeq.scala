@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala.collection
 package mutable
 
@@ -16,6 +28,20 @@ object IndexedSeq extends SeqFactory.Delegate[IndexedSeq](ArrayBuffer)
 trait IndexedSeqOps[A, +CC[_], +C <: AnyRef]
   extends scala.collection.IndexedSeqOps[A, CC, C]
     with SeqOps[A, CC, C] {
+
+  /** Modifies this $coll by applying a function to all elements of this $coll.
+    *
+    *  @param f      the function to apply to each element.
+    *  @return       this $coll modified by replacing all elements with the
+    *                result of applying the given function `f` to each element
+    *                of this $coll.
+    */
+  def mapInPlace(f: A => A): this.type = {
+    var i = 0
+    val siz = size
+    while (i < siz) { this(i) = f(this(i)); i += 1 }
+    this
+  }
 
   /** Sorts this $coll in place according to an Ordering.
     *

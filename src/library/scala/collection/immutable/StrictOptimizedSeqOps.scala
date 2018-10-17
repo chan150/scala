@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala
 package collection
 package immutable
@@ -10,6 +22,21 @@ import scala.language.higherKinds
 trait StrictOptimizedSeqOps[+A, +CC[_], +C]
   extends SeqOps[A, CC, C]
     with collection.StrictOptimizedSeqOps[A, CC, C] {
+
+  override def distinctBy[B](f: A => B): C = {
+    if (lengthCompare(1) <= 0) coll
+    else {
+      val builder = newSpecificBuilder
+      val seen = mutable.HashSet.empty[B]
+      val it = this.iterator
+      var different = false
+      while (it.hasNext) {
+        val next = it.next()
+        if (seen.add(f(next))) builder += next else different = true
+      }
+      if (different) builder.result() else coll
+    }
+  }
 
   override def updated[B >: A](index: Int, elem: B): CC[B] = {
     if (index < 0) throw new IndexOutOfBoundsException(index.toString)

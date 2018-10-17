@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala.runtime;
 
 
@@ -7,11 +19,11 @@ import java.lang.reflect.Method;
 
 public final class StructuralCallSite {
 
-    private Class<?>[] parameterTypes;
+    private Class<?>[] _parameterTypes;
     private SoftReference<MethodCache> cache = new SoftReference<>(new EmptyMethodCache());
 
     private StructuralCallSite(MethodType callType) {
-        parameterTypes = callType.parameterArray();
+        _parameterTypes = callType.parameterArray();
     }
 
     public MethodCache get() {
@@ -32,7 +44,7 @@ public final class StructuralCallSite {
         return m;
     }
     public Class<?>[] parameterTypes() {
-        return parameterTypes;
+        return _parameterTypes;
     }
 
     public static CallSite bootstrap(MethodHandles.Lookup lookup, String invokedName,

@@ -1,10 +1,14 @@
-/*                     __                                               *\
-**     ________ ___   / /  ___     Scala API                            **
-**    / __/ __// _ | / /  / _ |    (c) 2003-2013, LAMP/EPFL             **
-**  __\ \/ /__/ __ |/ /__/ __ |    http://scala-lang.org/               **
-** /____/\___/_/ |_/____/_/ | |                                         **
-**                          |/                                          **
-\*                                                                      */
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
 
 package scala.concurrent
 
@@ -77,7 +81,7 @@ trait ExecutionContext {
    *
    *  @param cause  the cause of the failure
    */
-  def reportFailure(@deprecatedName('t) cause: Throwable): Unit
+  def reportFailure(@deprecatedName("t") cause: Throwable): Unit
 
   /** Prepares for the execution of a task. Returns the prepared
      *  execution context. The recommended implementation of

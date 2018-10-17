@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala
 package collection
 package mutable
@@ -30,13 +42,16 @@ class BitSet(protected[collection] final var elems: Array[Long])
     with collection.BitSet
     with SortedSetOps[Int, SortedSet, BitSet]
     with collection.BitSetOps[BitSet]
-    with StrictOptimizedIterableOps[Int, Set, BitSet] {
+    with StrictOptimizedIterableOps[Int, Set, BitSet]
+    with StrictOptimizedSortedSetOps[Int, SortedSet, BitSet] {
 
   def this(initSize: Int) = this(new Array[Long](math.max((initSize + 63) >> 6, 1)))
 
   def this() = this(0)
 
   def bitSetFactory = BitSet
+
+  override def unsorted: Set[Int] = this
 
   protected[collection] final def nwords: Int = elems.length
 
@@ -84,8 +99,6 @@ class BitSet(protected[collection] final var elems: Array[Long])
       elems = elems1
     }
   }
-
-  def get(elem: Int): Option[Int] = if (contains(elem)) Some(elem) else None
 
   def unconstrained: collection.Set[Int] = this
 
@@ -141,20 +154,20 @@ class BitSet(protected[collection] final var elems: Array[Long])
 
   def toImmutable: immutable.BitSet = immutable.BitSet.fromBitMask(elems)
 
-  override def map(f: Int => Int): BitSet = super[BitSet].map(f)
+  override def map(f: Int => Int): BitSet = strictOptimizedMap(newSpecificBuilder, f)
   override def map[B](f: Int => B)(implicit @implicitNotFound(collection.BitSet.ordMsg) ev: Ordering[B]): SortedSet[B] =
-    super[SortedSetOps].map(f)
+    super[StrictOptimizedSortedSetOps].map(f)
 
-  override def flatMap(f: Int => IterableOnce[Int]): BitSet = super[BitSet].flatMap(f)
+  override def flatMap(f: Int => IterableOnce[Int]): BitSet = strictOptimizedFlatMap(newSpecificBuilder, f)
   override def flatMap[B](f: Int => IterableOnce[B])(implicit @implicitNotFound(collection.BitSet.ordMsg) ev: Ordering[B]): SortedSet[B] =
-    super[SortedSetOps].flatMap(f)
+    super[StrictOptimizedSortedSetOps].flatMap(f)
 
-  override def collect(pf: PartialFunction[Int, Int]): BitSet = super[BitSet].collect(pf)
+  override def collect(pf: PartialFunction[Int, Int]): BitSet = strictOptimizedCollect(newSpecificBuilder, pf)
   override def collect[B](pf: scala.PartialFunction[Int, B])(implicit @implicitNotFound(collection.BitSet.ordMsg) ev: Ordering[B]): SortedSet[B] =
-    super[SortedSetOps].collect(pf)
+    super[StrictOptimizedSortedSetOps].collect(pf)
 
   // necessary for disambiguation
-  override def zip[B](that: scala.Iterable[B])(implicit @implicitNotFound(collection.BitSet.zipOrdMsg) ev: Ordering[(Int, B)]): SortedSet[(Int, B)] =
+  override def zip[B](that: IterableOnce[B])(implicit @implicitNotFound(collection.BitSet.zipOrdMsg) ev: Ordering[(Int, B)]): SortedSet[(Int, B)] =
     super.zip(that)
 
   override protected[this] def writeReplace(): AnyRef = new BitSet.SerializationProxy(this)

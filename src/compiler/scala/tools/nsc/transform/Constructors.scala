@@ -1,6 +1,13 @@
-/*  NSC -- new Scala compiler
- * Copyright 2005-2013 LAMP/EPFL
- * @author
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
  */
 
 package scala.tools.nsc
@@ -756,11 +763,16 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
         if (isDelayedInitSubclass && remainingConstrStats.nonEmpty) delayedInitDefsAndConstrStats(defs, remainingConstrStats)
         else (Nil, remainingConstrStats)
 
+      val fence = if (clazz.primaryConstructor.hasAttachment[ConstructorNeedsFence.type]) {
+        val tree = localTyper.typedPos(clazz.primaryConstructor.pos)(gen.mkMethodCall(RuntimeStaticsModule, nme.releaseFence, Nil))
+        tree :: Nil
+      } else Nil
+
       // Assemble final constructor
       val primaryConstructor = deriveDefDef(primaryConstr)(_ => {
         treeCopy.Block(
           primaryConstrBody,
-          paramInits ::: constructorPrefix ::: uptoSuperStats ::: guardSpecializedInitializer(remainingConstrStatsDelayedInit),
+          paramInits ::: constructorPrefix ::: uptoSuperStats ::: guardSpecializedInitializer(remainingConstrStatsDelayedInit) ::: fence,
           primaryConstrBody.expr)
       })
 

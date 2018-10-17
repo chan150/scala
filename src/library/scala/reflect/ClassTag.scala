@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala
 package reflect
 
@@ -46,7 +58,8 @@ trait ClassTag[T] extends ClassManifestDeprecatedApis[T] with Equals with Serial
   def wrap: ClassTag[Array[T]] = ClassTag[Array[T]](arrayClass(runtimeClass))
 
   /** Produces a new array with element type `T` and length `len` */
-  override def newArray(len: Int): Array[T]
+  def newArray(len: Int): Array[T] =
+    java.lang.reflect.Array.newInstance(runtimeClass, len).asInstanceOf[Array[T]]
 
   /** A ClassTag[T] can serve as an extractor that matches only objects of type T.
    *

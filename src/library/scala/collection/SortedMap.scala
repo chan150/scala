@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala
 package collection
 
@@ -14,7 +26,7 @@ trait SortedMap[K, +V]
 
   def unsorted: Map[K, V] = this
 
-  override protected def fromSpecificIterable(coll: Iterable[(K, V)] @uncheckedVariance): SortedMapCC[K, V] @uncheckedVariance = sortedMapFactory.from(coll)
+  override protected def fromSpecific(coll: IterableOnce[(K, V)] @uncheckedVariance): SortedMapCC[K, V] @uncheckedVariance = sortedMapFactory.from(coll)
   override protected def newSpecificBuilder: mutable.Builder[(K, V), SortedMapCC[K, V]] @uncheckedVariance = sortedMapFactory.newBuilder[K, V]
 
   /**
@@ -39,7 +51,7 @@ trait SortedMapOps[K, +V, +CC[X, Y] <: Map[X, Y] with SortedMapOps[X, Y, CC, _],
      with SortedOps[K, C] {
 
   /**
-    * Type alias to `CC`. It is used to provide a default implementation of the `fromSpecificIterable`
+    * Type alias to `CC`. It is used to provide a default implementation of the `fromSpecific`
     * and `newSpecificBuilder` operations.
     *
     * Due to the `@uncheckedVariance` annotation, usage of this type member can be unsound and is
@@ -122,7 +134,7 @@ trait SortedMapOps[K, +V, +CC[X, Y] <: Map[X, Y] with SortedMapOps[X, Y, CC, _],
 
   /** The implementation class of the set returned by `keySet` */
   protected class KeySortedSet extends SortedSet[K] with GenKeySet with GenKeySortedSet {
-    def diff(that: Set[K]): SortedSet[K] = fromSpecificIterable(view.filterNot(that))
+    def diff(that: Set[K]): SortedSet[K] = fromSpecific(view.filterNot(that))
     def rangeImpl(from: Option[K], until: Option[K]): SortedSet[K] = {
       val map = SortedMapOps.this.rangeImpl(from, until)
       new map.KeySortedSet
@@ -166,12 +178,12 @@ trait SortedMapOps[K, +V, +CC[X, Y] <: Map[X, Y] with SortedMapOps[X, Y, CC, _],
     *                The order of the elements is preserved.
     */
   def collect[K2, V2](pf: PartialFunction[(K, V), (K2, V2)])(implicit @implicitNotFound(SortedMapOps.ordMsg) ordering: Ordering[K2]): CC[K2, V2] =
-    flatMap { kv =>
-      if (pf.isDefinedAt(kv)) new View.Single(pf(kv))
-      else View.Empty
-    }
+    sortedMapFactory.from(new View.Collect(toIterable, pf))
 
-  override def concat[V2 >: V](xs: Iterable[(K, V2)]): CC[K, V2] = sortedMapFactory.from(new View.Concat(toIterable, xs))
+  override def concat[V2 >: V](suffix: IterableOnce[(K, V2)]): CC[K, V2] = sortedMapFactory.from(suffix match {
+    case it: Iterable[(K, V2)] => new View.Concat(toIterable, it)
+    case _ => iterator.concat(suffix.iterator)
+  })
 
   /** Alias for `concat` */
   @`inline` override final def ++ [V2 >: V](xs: Iterable[(K, V2)]): CC[K, V2] = concat(xs)
@@ -186,7 +198,7 @@ trait SortedMapOps[K, +V, +CC[X, Y] <: Map[X, Y] with SortedMapOps[X, Y, CC, _],
 }
 
 object SortedMapOps {
-  private final val ordMsg = "No implicit Ordering[${K2}] found to build a SortedMap[${K2}, ${V2}]. You may want to upcast to a Map[${K}, ${V}] first by calling `unsorted`."
+  private[collection] final val ordMsg = "No implicit Ordering[${K2}] found to build a SortedMap[${K2}, ${V2}]. You may want to upcast to a Map[${K}, ${V}] first by calling `unsorted`."
 
   /** Specializes `MapWithFilter` for sorted Map collections
     *

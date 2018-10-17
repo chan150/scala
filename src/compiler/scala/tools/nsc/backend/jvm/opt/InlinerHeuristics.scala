@@ -1,6 +1,13 @@
-/* NSC -- new Scala compiler
- * Copyright 2005-2014 LAMP/EPFL
- * @author  Martin Odersky
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
  */
 
 package scala.tools.nsc
@@ -166,7 +173,7 @@ abstract class InlinerHeuristics extends PerRunInit {
             postCall.flatMap(call => {
               callGraph.addIfMissing(callee.callee, callee.calleeDeclarationClass)
               val maybeCallsite = callGraph.findCallSite(callee.callee, call)
-              maybeCallsite.flatMap(requestIfCanInline(_, reason).flatMap(_.right.toOption))
+              maybeCallsite.flatMap(requestIfCanInline(_, reason).flatMap(_.toOption))
             }).toList
           }
           Some(Right(InlineRequest(callsite, postInlineRequest, reason)))

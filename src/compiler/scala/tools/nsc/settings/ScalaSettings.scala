@@ -1,7 +1,15 @@
-/* NSC -- new Scala compiler
- * Copyright 2005-2013 LAMP/EPFL
- * @author  Martin Odersky
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
  */
+
 // $Id$
 
 package scala
@@ -15,6 +23,7 @@ import scala.language.existentials
 import scala.annotation.elidable
 import scala.tools.util.PathResolver.Defaults
 import scala.collection.mutable
+import scala.reflect.internal.util.StringContextStripMarginOps
 
 trait ScalaSettings extends AbsScalaSettings
                        with StandardScalaSettings
@@ -44,27 +53,27 @@ trait ScalaSettings extends AbsScalaSettings
 
   val jvmargs  = PrefixSetting("-J<flag>", "-J", "Pass <flag> directly to the runtime system.")
   val defines  = PrefixSetting("-Dproperty=value", "-D", "Pass -Dproperty=value directly to the runtime system.")
-  /*val toolcp =*/ PathSetting("-toolcp", "Add to the runner classpath.", "")
-  val nobootcp = BooleanSetting("-nobootcp", "Do not use the boot classpath for the scala jars.")
+  /*val toolcp =*/ PathSetting("-toolcp", "Add to the runner classpath.", "") withAbbreviation "--tool-class-path"
+  val nobootcp = BooleanSetting("-nobootcp", "Do not use the boot classpath for the scala jars.") withAbbreviation "--no-boot-class-path"
 
   /**
    *  Standard settings
    */
   // argfiles is only for the help message
   /*val argfiles = */ BooleanSetting    ("@<file>", "A text file containing compiler arguments (options and source files)")
-  val classpath     = PathSetting       ("-classpath", "Specify where to find user class files.", defaultClasspath) withAbbreviation "-cp"
+  val classpath     = PathSetting       ("-classpath", "Specify where to find user class files.", defaultClasspath) withAbbreviation "-cp" withAbbreviation "--class-path"
   val d             = OutputSetting     (outputDirs, ".")
-  val nospecialization = BooleanSetting ("-no-specialization", "Ignore @specialize annotations.")
+  val nospecialization = BooleanSetting ("-no-specialization", "Ignore @specialize annotations.") withAbbreviation "--no-specialization"
 
   // Would be nice to build this dynamically from scala.languageFeature.
   // The two requirements: delay error checking until you have symbols, and let compiler command build option-specific help.
   object languageFeatures extends MultiChoiceEnumeration {
     val dynamics            = Choice("dynamics",            "Allow direct or indirect subclasses of scala.Dynamic")
-    val postfixOps          = Choice("postfixOps",          "Allow postfix operator notation, such as `1 to 10 toList'")
-    val reflectiveCalls     = Choice("reflectiveCalls",     "Allow reflective access to members of structural types")
-    val implicitConversions = Choice("implicitConversions", "Allow definition of implicit functions called views")
-    val higherKinds         = Choice("higherKinds",         "Allow higher-kinded types")
     val existentials        = Choice("existentials",        "Existential types (besides wildcard types) can be written and inferred")
+    val higherKinds         = Choice("higherKinds",         "Allow higher-kinded types")
+    val implicitConversions = Choice("implicitConversions", "Allow definition of implicit functions called views")
+    val postfixOps          = Choice("postfixOps",          "Allow postfix operator notation, such as `1 to 10 toList` (not recommended)")
+    val reflectiveCalls     = Choice("reflectiveCalls",     "Allow reflective access to members of structural types")
     val macros              = Choice("experimental.macros", "Allow macro definition (besides implementation and application)")
   }
   val language      = {
@@ -74,7 +83,7 @@ trait ScalaSettings extends AbsScalaSettings
       helpArg = "feature",
       descr   = description,
       domain  = languageFeatures
-    )
+    ) withAbbreviation "--language"
   }
   val release = StringSetting("-release", "release", "Compile for a specific version of the Java platform. Supported targets: 6, 7, 8, 9", "").withPostSetHook { (value: StringSetting) =>
     if (value.value != "" && !scala.util.Properties.isJavaAtLeast("9")) {
@@ -83,7 +92,7 @@ trait ScalaSettings extends AbsScalaSettings
       // TODO validate numeric value
       // TODO validate release <= java.specification.version
     }
-  }
+  } withAbbreviation "--release"
   def releaseValue: Option[String] = Option(release.value).filter(_ != "")
 
   /*
@@ -98,6 +107,9 @@ trait ScalaSettings extends AbsScalaSettings
   def isScala213: Boolean = source.value >= version213
   private[this] val version214 = ScalaVersion("2.14.0")
   def isScala214: Boolean = source.value >= version214
+  private[this] val version300 = ScalaVersion("3.0.0")
+  def isScala300: Boolean = source.value >= version300
+
 
   /**
    * -X "Advanced" settings
@@ -198,7 +210,30 @@ trait ScalaSettings extends AbsScalaSettings
   val Ylogcp          = BooleanSetting    ("-Ylog-classpath", "Output information about what classpath is being applied.")
   val Ynogenericsig   = BooleanSetting    ("-Yno-generic-signatures", "Suppress generation of generic signatures for Java.")
   val noimports       = BooleanSetting    ("-Yno-imports", "Compile without importing scala.*, java.lang.*, or Predef.")
+                       .withPostSetHook(bs => if (bs) imports.value = Nil)
   val nopredef        = BooleanSetting    ("-Yno-predef", "Compile without importing Predef.")
+                       .withPostSetHook(bs => if (bs && !noimports) imports.value = "java.lang" :: "scala" :: Nil)
+  val imports         = MultiStringSetting(name="-Yimports", arg="import", descr="Custom root imports, default is `java.lang,scala,scala.Predef`.", helpText=Some(
+  sm"""|Specify a list of packages and objects to import from as "root" imports.
+       |Root imports form the root context in which all Scala source is evaluated.
+       |The names supplied to `-Yimports` must be fully-qualified.
+       |
+       |For example, the default scala.Predef results in an `import scala.Predef._`.
+       |Ordinary access and scoping rules apply. Root imports increase the scoping
+       |depth, so that later root imports shadow earlier ones. In addition,
+       |names bound by root imports have lowest binding precedence, so that they
+       |cannot induce ambiguities in user code, where definitions and imports
+       |always have a higher precedence. Root imports are imports of last resort.
+       |
+       |By convention, an explicit import from a root import object such as
+       |Predef disables that root import for the current source file. The import
+       |is disabled when the import expression is compiled, so, also by convention,
+       |the import should be placed early in source code order. The textual name
+       |in the import does not need to match the value of `-Yimports`; the import
+       |works in the usual way, subject to renames and name binding precedence.
+       |
+    """
+  ))
   val Yrecursion      = IntSetting        ("-Yrecursion", "Set recursion depth used when locking symbols.", 0, Some((0, Int.MaxValue)), (_: String) => None)
   val Xshowtrees      = BooleanSetting    ("-Yshow-trees", "(Requires -Xprint:) Print detailed ASTs in formatted form.")
   val XshowtreesCompact
@@ -214,7 +249,8 @@ trait ScalaSettings extends AbsScalaSettings
   val stopAfter       = PhasesSetting     ("-Ystop-after", "Stop after") withAbbreviation ("-stop") // backward compat
   val stopBefore      = PhasesSetting     ("-Ystop-before", "Stop before")
   val Yrangepos       = BooleanSetting    ("-Yrangepos", "Use range positions for syntax trees.")
-  val Ymemberpos      = StringSetting     ("-Yshow-member-pos", "output style", "Show start and end positions of members", "") withPostSetHook (_ => Yrangepos.value = true)
+  val Yvalidatepos    = PhasesSetting     ("-Yvalidate-pos", s"Validate positions after the given phases (implies ${Yrangepos.name})") withPostSetHook (_ => Yrangepos.value = true)
+  val Ymemberpos      = StringSetting     ("-Yshow-member-pos", "output style", s"Show start and end positions of members (implies ${Yrangepos.name})", "") withPostSetHook (_ => Yrangepos.value = true)
   val Yreifycopypaste = BooleanSetting    ("-Yreify-copypaste", "Dump the reified trees in copypasteable representation.")
   val Ymacroexpand    = ChoiceSetting     ("-Ymacro-expand", "policy", "Control expansion of macros, useful for scaladoc and presentation compiler.", List(MacroExpand.Normal, MacroExpand.None, MacroExpand.Discard), MacroExpand.Normal)
   val Ymacronoexpand  = BooleanSetting    ("-Ymacro-no-expand", "Don't expand macros. Might be useful for scaladoc and presentation compiler, but will crash anything which uses macros and gets past typer.") withDeprecationMessage(s"Use ${Ymacroexpand.name}:${MacroExpand.None}") withPostSetHook(_ => Ymacroexpand.value = MacroExpand.None)

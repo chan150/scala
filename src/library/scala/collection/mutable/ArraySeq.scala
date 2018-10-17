@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala.collection
 package mutable
 
@@ -24,16 +36,15 @@ import java.util.Arrays
   *  @define willNotTerminateInf
   */
 @SerialVersionUID(3L)
-abstract class ArraySeq[T]
+sealed abstract class ArraySeq[T]
   extends AbstractSeq[T]
     with IndexedSeq[T]
     with IndexedSeqOps[T, ArraySeq, ArraySeq[T]]
-    with IndexedOptimizedSeq[T]
     with StrictOptimizedSeqOps[T, ArraySeq, ArraySeq[T]] {
 
   override def iterableFactory: scala.collection.SeqFactory[ArraySeq] = ArraySeq.untagged
 
-  override protected def fromSpecificIterable(coll: scala.collection.Iterable[T]): ArraySeq[T] = {
+  override protected def fromSpecific(coll: scala.collection.IterableOnce[T]): ArraySeq[T] = {
     val b = ArrayBuilder.make(elemTag).asInstanceOf[ArrayBuilder[T]]
     val s = coll.knownSize
     if(s > 0) b.sizeHint(s)
@@ -48,7 +59,7 @@ abstract class ArraySeq[T]
   def elemTag: ClassTag[_]
 
   /** Update element at given index */
-  def update(index: Int, elem: T): Unit
+  def update(@deprecatedName("idx", "2.13.0") index: Int, elem: T): Unit
 
   /** The underlying array. Its element type does not have to be equal to the element type of this ArraySeq. A primitive
     * ArraySeq can be backed by an array of boxed values and a reference ArraySeq can be backed by an array of a supertype
@@ -60,12 +71,14 @@ abstract class ArraySeq[T]
   /** Clones this object, including the underlying Array. */
   override def clone(): ArraySeq[T] = ArraySeq.make(array.clone()).asInstanceOf[ArraySeq[T]]
 
-  override def copyToArray[B >: T](xs: Array[B], start: Int = 0): xs.type = copyToArray[B](xs, start, length)
+  override def copyToArray[B >: T](xs: Array[B], start: Int): Int = copyToArray[B](xs, start, length)
 
-  override def copyToArray[B >: T](xs: Array[B], start: Int, len: Int): xs.type = {
-    val l = scala.math.min(scala.math.min(len, length), xs.length-start)
-    if(l > 0) Array.copy(array, 0, xs, start, l)
-    xs
+  override def copyToArray[B >: T](xs: Array[B], start: Int, len: Int): Int = {
+    val copied = IterableOnce.elemsToCopyToArray(length, xs.length, start, len)
+    if(copied > 0) {
+      Array.copy(array, 0, xs, start, copied)
+    }
+    copied
   }
 
   override protected[this] def writeReplace(): AnyRef = this
@@ -76,6 +89,9 @@ abstract class ArraySeq[T]
     case _ =>
       super.equals(other)
   }
+
+  override def sorted[B >: T](implicit ord: Ordering[B]): ArraySeq[T] =
+    ArraySeq.make(array.asInstanceOf[Array[Any]].sorted(ord.asInstanceOf[Ordering[Any]])).asInstanceOf[ArraySeq[T]]
 
   override def sortInPlace[B >: T]()(implicit ord: Ordering[B]): this.type = {
     if (length > 1) scala.util.Sorting.stableSort(array.asInstanceOf[Array[B]])
@@ -139,11 +155,14 @@ object ArraySeq extends StrictOptimizedClassTagSeqFactory[ArraySeq] { self =>
   final class ofRef[T <: AnyRef](val array: Array[T]) extends ArraySeq[T] {
     lazy val elemTag = ClassTag[T](array.getClass.getComponentType)
     def length: Int = array.length
-    def apply(index: Int): T = array(index).asInstanceOf[T]
+    def apply(index: Int): T = array(index)
     def update(index: Int, elem: T): Unit = { array(index) = elem }
     override def hashCode = MurmurHash3.arraySeqHash(array)
     override def equals(that: Any) = that match {
-      case that: ofRef[_] => Arrays.equals(array.asInstanceOf[Array[AnyRef]], that.array.asInstanceOf[Array[AnyRef]])
+      case that: ofRef[_] =>
+        Array.equals(
+          this.array.asInstanceOf[Array[AnyRef]],
+          that.array.asInstanceOf[Array[AnyRef]])
       case _ => super.equals(that)
     }
   }
@@ -154,7 +173,7 @@ object ArraySeq extends StrictOptimizedClassTagSeqFactory[ArraySeq] { self =>
     def length: Int = array.length
     def apply(index: Int): Byte = array(index)
     def update(index: Int, elem: Byte): Unit = { array(index) = elem }
-    override def hashCode = MurmurHash3.byteArraySeqHash(array)
+    override def hashCode = MurmurHash3.arraySeqHash(array)
     override def equals(that: Any) = that match {
       case that: ofByte => Arrays.equals(array, that.array)
       case _ => super.equals(that)
@@ -184,6 +203,27 @@ object ArraySeq extends StrictOptimizedClassTagSeqFactory[ArraySeq] { self =>
     override def equals(that: Any) = that match {
       case that: ofChar => Arrays.equals(array, that.array)
       case _ => super.equals(that)
+    }
+
+    override def addString(sb: StringBuilder, start: String, sep: String, end: String): StringBuilder = {
+      val jsb = sb.underlying
+      if (start.length != 0) jsb.append(start)
+      val len = array.length
+      if (len != 0) {
+        if (sep.isEmpty) jsb.append(array)
+        else {
+          jsb.ensureCapacity(jsb.length + len + end.length + (len - 1) * sep.length)
+          jsb.append(array(0))
+          var i = 1
+          while (i < len) {
+            jsb.append(sep)
+            jsb.append(array(i))
+            i += i
+          }
+        }
+      }
+      if (end.length != 0) jsb.append(end)
+      sb
     }
   }
 

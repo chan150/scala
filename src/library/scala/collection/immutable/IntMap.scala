@@ -1,10 +1,14 @@
-/*                     __                                               *\
-**     ________ ___   / /  ___     Scala API                            **
-**    / __/ __// _ | / /  / _ |    (c) 2003-2013, LAMP/EPFL             **
-**  __\ \/ /__/ __ |/ /__/ __ |    http://scala-lang.org/               **
-** /____/\___/_/ |_/____/_/ | |                                         **
-**                          |/                                          **
-\*                                                                      */
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
 
 package scala.collection
 package immutable
@@ -94,7 +98,7 @@ object IntMap {
 
   implicit def toBuildFrom[V](factory: IntMap.type): BuildFrom[Any, (Int, V), IntMap[V]] = ToBuildFrom.asInstanceOf[BuildFrom[Any, (Int, V), IntMap[V]]]
   private[this] object ToBuildFrom extends BuildFrom[Any, (Int, AnyRef), IntMap[AnyRef]] {
-    def fromSpecificIterable(from: Any)(it: scala.collection.Iterable[(Int, AnyRef)]) = IntMap.from(it)
+    def fromSpecific(from: Any)(it: IterableOnce[(Int, AnyRef)]) = IntMap.from(it)
     def newBuilder(from: Any) = IntMap.newBuilder[AnyRef]
   }
 
@@ -184,9 +188,9 @@ sealed abstract class IntMap[+T] extends AbstractMap[Int, T]
   with MapOps[Int, T, Map, IntMap[T]]
   with StrictOptimizedIterableOps[(Int, T), Iterable, IntMap[T]] {
 
-  override protected def fromSpecificIterable(coll: scala.collection.Iterable[(Int, T) @uncheckedVariance]): IntMap[T] =
-    intMapFromIterable[T](coll)
-  protected def intMapFromIterable[V2](coll: scala.collection.Iterable[(Int, V2)]): IntMap[V2] = {
+  override protected def fromSpecific(coll: scala.collection.IterableOnce[(Int, T) @uncheckedVariance]): IntMap[T] =
+    intMapFrom[T](coll)
+  protected def intMapFrom[V2](coll: scala.collection.IterableOnce[(Int, V2)]): IntMap[V2] = {
     val b = IntMap.newBuilder[V2]
     b.sizeHint(coll)
     b.addAll(coll)
@@ -235,7 +239,7 @@ sealed abstract class IntMap[+T] extends AbstractMap[Int, T]
     *
     * @param f The loop body
     */
-  final def foreachKey(f: Int => Unit): Unit = this match {
+  final def foreachKey[U](f: Int => U): Unit = this match {
     case IntMap.Bin(_, _, left, right) => { left.foreachKey(f); right.foreachKey(f) }
     case IntMap.Tip(key, _) => f(key)
     case IntMap.Nil =>
@@ -252,7 +256,7 @@ sealed abstract class IntMap[+T] extends AbstractMap[Int, T]
     *
     * @param f The loop body
     */
-  final def foreachValue(f: T => Unit): Unit = this match {
+  final def foreachValue[U](f: T => U): Unit = this match {
     case IntMap.Bin(_, _, left, right) => { left.foreachValue(f); right.foreachValue(f) }
     case IntMap.Tip(_, value) => f(value)
     case IntMap.Nil =>
@@ -261,7 +265,7 @@ sealed abstract class IntMap[+T] extends AbstractMap[Int, T]
   override protected[this] def className = "IntMap"
 
   override def isEmpty = this == IntMap.Nil
-
+  override def knownSize: Int = if (isEmpty) 0 else super.knownSize
   override def filter(f: ((Int, T)) => Boolean): IntMap[T] = this match {
     case IntMap.Bin(prefix, mask, left, right) => {
       val (newleft, newright) = (left.filter(f), right.filter(f))
@@ -318,17 +322,17 @@ sealed abstract class IntMap[+T] extends AbstractMap[Int, T]
     case IntMap.Nil => IntMap.Tip(key, value)
   }
 
-  def map[V2](f: ((Int, T)) => (Int, V2)): IntMap[V2] = intMapFromIterable(new View.Map(toIterable, f))
+  def map[V2](f: ((Int, T)) => (Int, V2)): IntMap[V2] = intMapFrom(new View.Map(toIterable, f))
 
-  def flatMap[V2](f: ((Int, T)) => IterableOnce[(Int, V2)]): IntMap[V2] = intMapFromIterable(new View.FlatMap(toIterable, f))
+  def flatMap[V2](f: ((Int, T)) => IterableOnce[(Int, V2)]): IntMap[V2] = intMapFrom(new View.FlatMap(toIterable, f))
 
-  override def concat[V1 >: T](that: collection.Iterable[(Int, V1)]): IntMap[V1] =
+  override def concat[V1 >: T](that: collection.IterableOnce[(Int, V1)]): IntMap[V1] =
     super.concat(that).asInstanceOf[IntMap[V1]] // Already has corect type but not declared as such
 
   override def ++ [V1 >: T](that: collection.Iterable[(Int, V1)]): IntMap[V1] = concat(that)
 
   def collect[V2](pf: PartialFunction[(Int, T), (Int, V2)]): IntMap[V2] =
-    flatMap(kv => if (pf.isDefinedAt(kv)) new View.Single(pf(kv)) else View.Empty)
+    strictOptimizedCollect(IntMap.newBuilder[V2], pf)
 
   /**
     * Updates the map, using the provided function to resolve conflicts if the key is already present.

@@ -5,7 +5,9 @@ import org.junit.runners.JUnit4
 import org.junit.Test
 import org.junit.Assert.assertEquals
 
+
 import scala.tools.testing.AssertUtil
+import scala.tools.testing.AssertUtil.assertThrows
 
 /* Test for scala/bug#9043 */
 @RunWith(classOf[JUnit4])
@@ -156,39 +158,39 @@ class ArrayBufferTest {
 
   @Test
   def testRemoveMany: Unit = {
-    def testRemoveMany(idx: Int, count: Int, expectation: ArrayBuffer[Int]): Unit = {
+    def testRemoveMany(index: Int, count: Int, expectation: ArrayBuffer[Int]): Unit = {
       val buffer = ArrayBuffer(0, 1, 2)
-      buffer.remove(idx, count)
+      buffer.remove(index, count)
       assertEquals(expectation, buffer)
     }
 
-    testRemoveMany(idx = 0, count = 0, expectation = ArrayBuffer(0, 1, 2))
-    testRemoveMany(idx = 0, count = 1, expectation = ArrayBuffer(1, 2))
-    testRemoveMany(idx = 0, count = 2, expectation = ArrayBuffer(2))
-    testRemoveMany(idx = 0, count = 3, expectation = ArrayBuffer())
-    testRemoveMany(idx = 1, count = 1, expectation = ArrayBuffer(0, 2))
-    testRemoveMany(idx = 1, count = 2, expectation = ArrayBuffer(0))
-    testRemoveMany(idx = 2, count = 1, expectation = ArrayBuffer(0, 1))
+    testRemoveMany(index = 0, count = 0, expectation = ArrayBuffer(0, 1, 2))
+    testRemoveMany(index = 0, count = 1, expectation = ArrayBuffer(1, 2))
+    testRemoveMany(index = 0, count = 2, expectation = ArrayBuffer(2))
+    testRemoveMany(index = 0, count = 3, expectation = ArrayBuffer())
+    testRemoveMany(index = 1, count = 1, expectation = ArrayBuffer(0, 2))
+    testRemoveMany(index = 1, count = 2, expectation = ArrayBuffer(0))
+    testRemoveMany(index = 2, count = 1, expectation = ArrayBuffer(0, 1))
   }
 
   @Test(expected = classOf[IndexOutOfBoundsException])
   def testRemoveManyWithNegativeIndex: Unit = {
-    ArrayBuffer(0, 1, 2).remove(idx = -1, count = 1)
+    ArrayBuffer(0, 1, 2).remove(index = -1, count = 1)
   }
 
   @Test(expected = classOf[IndexOutOfBoundsException])
   def testRemoveManyWithTooLargeIndex: Unit = {
-    ArrayBuffer(0).remove(idx = 1, count = 1)
+    ArrayBuffer(0).remove(index = 1, count = 1)
   }
 
   @Test(expected = classOf[IllegalArgumentException])
   def testRemoveManyWithNegativeCount: Unit = {
-    ArrayBuffer(0).remove(idx = 0, count = -1)
+    ArrayBuffer(0).remove(index = 0, count = -1)
   }
 
   @Test(expected = classOf[IndexOutOfBoundsException])
   def testRemoveManyWithTooLargeCount: Unit = {
-    ArrayBuffer(0).remove(idx = 0, count = 100)
+    ArrayBuffer(0).remove(index = 0, count = 100)
   }
 
   @Test
@@ -297,4 +299,58 @@ class ArrayBufferTest {
 
     assertEquals(ArrayBuffer(1, 2, 3), buffer)
   }
+  @Test
+  def testMapResult: Unit = {
+    val buffer = ArrayBuffer(3, 2, 1)
+
+    val builder = buffer.mapResult(_.mkString(","))
+
+    buffer.prepend(4)
+
+    assertEquals(builder.result(), "4,3,2,1")
+  }
+
+  @Test
+  def emptyIteratorDropOneMustBeEmpty: Unit = {
+    assertThrows[NoSuchElementException](new ArrayBuffer[Int].iterator.drop(1).next())
+  }
+
+  @Test
+  def t11114_ArrayBufferPatch: Unit = {
+    {
+      def newBuf = ArrayBuffer(1, 2, 3, 4, 5)
+      assertEquals(ArrayBuffer(1, 2, 3, 10, 11), newBuf.patchInPlace(3, List(10, 11), 4))
+      assertEquals(ArrayBuffer(1, 2, 3, 10, 11), newBuf.patchInPlace(3, List(10, 11), 10))
+      assertEquals(ArrayBuffer(10, 11), newBuf.patchInPlace(0, List(10, 11), 10))
+      assertEquals(ArrayBuffer(1, 2, 3, 10, 11, 12), newBuf.patchInPlace(3, List(10, 11, 12), 4))
+    }
+
+    for {
+      size <- 0 to 10
+      patchSize <- 0 to 12
+      patchRange = 100 until (100 + patchSize)
+      patch <- Seq(() => patchRange.toVector, () => patchRange.iterator)
+      from <- -1 to 11
+      replaced <- -1 to 13
+    } {
+      def createBuf = (0 until size).to(ArrayBuffer)
+
+      val fromPatch = createBuf.patch(from, patch(), replaced)
+      val fromPatchInPlace = createBuf.patchInPlace(from, patch(), replaced)
+
+      assert(fromPatch == fromPatchInPlace,
+        s"""Failed on:
+           |  size: $size
+           |  targetBuffer: $createBuf
+           |  from: $from
+           |  patch sequence: ${patch()} (${patch().toVector})
+           |  replaced: $replaced
+           |  patch returned: $fromPatch
+           |  patchInPlace returned: $fromPatchInPlace
+         """.stripMargin
+      )
+    }
+  }
+
+
 }

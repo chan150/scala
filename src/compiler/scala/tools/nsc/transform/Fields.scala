@@ -1,6 +1,13 @@
-/*  NSC -- new Scala compiler
- * Copyright 2005-2013 LAMP/EPFL
- * @author
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
  */
 
 package scala.tools.nsc
@@ -422,12 +429,12 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 //        println(s"expanded modules for $clazz: $expandedModules")
 
         // afterOwnPhase, so traits receive trait setters for vals (needs to be at finest grain to avoid looping)
-        val synthInSubclass =
-          clazz.mixinClasses.flatMap(mixin => afterOwnPhase{mixin.info}.decls.toList.filter(accessorImplementedInSubclass))
+        val synthInSubclass: List[Symbol] =
+          clazz.mixinClasses.flatMap(mixin => afterOwnPhase(mixin.info).decls.toList.filter(accessorImplementedInSubclass))
 
         // mixin field accessors --
         // invariant: (accessorsMaybeNeedingImpl, mixedInAccessorAndFields).zipped.forall(case (acc, clone :: _) => `clone` is clone of `acc` case _ => true)
-        val mixedInAccessorAndFields = synthInSubclass.map{ member =>
+        val mixedInAccessorAndFields: List[List[Symbol]] = synthInSubclass.map{ member =>
           def cloneAccessor() = {
             val clonedAccessor = (member cloneSymbol clazz) setPos clazz.pos
             setMixedinAccessorFlags(member, clonedAccessor)
@@ -593,9 +600,15 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       // LazyUnit does not have a `value` member
       val valueSym = if (isUnit) NoSymbol else refTpe.member(nme.value)
 
+      def refineLiteral(tree: Tree): Tree =
+        lazyValType match {
+          case _: ConstantType => gen.mkAsInstanceOf(tree, lazyValType)
+          case _ => tree
+        }
+
       def initialized = Select(Ident(holderSym), initializedSym)
       def initialize  = Select(Ident(holderSym), initializeSym)
-      def getValue    = if (isUnit) UNIT else Apply(Select(Ident(holderSym), valueSym), Nil)
+      def getValue    = if (isUnit) UNIT else refineLiteral(Apply(Select(Ident(holderSym), valueSym), Nil))
 
       val computerSym =
         owner.newMethod(lazyName append nme.LAZY_SLOW_SUFFIX, pos, ARTIFACT | PRIVATE) setInfo MethodType(Nil, lazyValType)
@@ -605,11 +618,12 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       val computer = mkAccessor(computerSym)(gen.mkSynchronized(Ident(holderSym))(
         If(initialized, getValue,
           if (isUnit) Block(rhsAtComputer :: Nil, Apply(initialize, Nil))
-          else Apply(initialize, rhsAtComputer :: Nil))))
+          else refineLiteral(Apply(initialize, rhsAtComputer :: Nil)))))
 
       val accessor = mkAccessor(lazySym)(
-        If(initialized, getValue,
-          Apply(Ident(computerSym), Nil)))
+        refineLiteral(
+          If(initialized, getValue,
+            Apply(Ident(computerSym), Nil))))
 
       // do last!
       // remove STABLE: prevent replacing accessor call of type Unit by BoxedUnit.UNIT in erasure
@@ -652,9 +666,20 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         // trait val/var setter mixed into class
         else fieldAccess(setter) match {
           case NoSymbol => EmptyTree
-          case fieldSel => afterOwnPhase { // the assign only type checks after our phase (assignment to val)
-            mkAccessor(setter)(Assign(Select(This(clazz), fieldSel), castHack(Ident(setter.firstParam), fieldSel.info)))
-          }
+          case fieldSel =>
+            if (!fieldSel.hasFlag(MUTABLE)) {
+              // If the field is mutable, it won't be final, so we can write to it in a setter.
+              // If it's not, we still need to initialize it, and make sure it's safely published.
+              // Since initialization is performed (lexically) outside of the constructor (in the trait setter),
+              // we have to make the field mutable starting with classfile format 53
+              // (it was never allowed, but the verifier enforces this now).
+              fieldSel.setFlag(MUTABLE)
+              fieldSel.owner.primaryConstructor.updateAttachment(ConstructorNeedsFence)
+            }
+
+            afterOwnPhase { // the assign only type checks after our phase (assignment to val)
+              mkAccessor(setter)(Assign(Select(This(clazz), fieldSel), castHack(Ident(setter.firstParam), fieldSel.info)))
+            }
         }
 
       def moduleAccessorBody(module: Symbol): Tree =
@@ -679,14 +704,14 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         synthAccessorInClass.expandLazyClassMember(lazyVar, getter, rhs)
       }
 
-      (afterOwnPhase { clazz.info.decls }.toList) filter checkAndClearNeedsTrees map {
+      afterOwnPhase(clazz.info.decls).toList.filter(checkAndClearNeedsTrees).map {
         case module if module hasAllFlags (MODULE | METHOD) => moduleAccessorBody(module)
         case getter if getter hasAllFlags (LAZY | METHOD)   => superLazy(getter)
         case setter if setter.isSetter                      => setterBody(setter)
         case getter if getter.hasFlag(ACCESSOR)             => getterBody(getter)
         case field  if !(field hasFlag METHOD)              => mkTypedValDef(field) // vals/vars and module vars (cannot have flags PACKAGE | JAVA since those never receive NEEDS_TREES)
         case _ => EmptyTree
-      } filterNot (_ == EmptyTree) // there will likely be many EmptyTrees, but perhaps no thicket blocks that need expanding
+      }.filterNot(_ == EmptyTree) // there will likely be many EmptyTrees, but perhaps no thicket blocks that need expanding
     }
 
     def rhsAtOwner(stat: ValOrDefDef, newOwner: Symbol): Tree =

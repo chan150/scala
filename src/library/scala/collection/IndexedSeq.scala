@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala
 package collection
 
@@ -36,23 +48,31 @@ trait IndexedSeqOps[+A, +CC[_], +C] extends Any with SeqOps[A, CC, C] { self =>
   // Override transformation operations to use more efficient views than the default ones
   override def prepended[B >: A](elem: B): CC[B] = iterableFactory.from(new IndexedSeqView.Prepended(elem, this))
 
-  override def take(n: Int): C = fromSpecificIterable(new IndexedSeqView.Take(this, n))
+  override def take(n: Int): C = fromSpecific(new IndexedSeqView.Take(this, n))
 
-  override def takeRight(n: Int): C = fromSpecificIterable(new IndexedSeqView.TakeRight(this, n))
+  override def takeRight(n: Int): C = fromSpecific(new IndexedSeqView.TakeRight(this, n))
 
-  override def drop(n: Int): C = fromSpecificIterable(new IndexedSeqView.Drop(this, n))
+  override def drop(n: Int): C = fromSpecific(new IndexedSeqView.Drop(this, n))
 
-  override def dropRight(n: Int): C = fromSpecificIterable(new IndexedSeqView.DropRight(this, n))
+  override def dropRight(n: Int): C = fromSpecific(new IndexedSeqView.DropRight(this, n))
 
   override def map[B](f: A => B): CC[B] = iterableFactory.from(new IndexedSeqView.Map(this, f))
 
-  override def reverse: C = fromSpecificIterable(new IndexedSeqView.Reverse(this))
+  override def reverse: C = fromSpecific(new IndexedSeqView.Reverse(this))
 
-  override def slice(from: Int, until: Int): C = fromSpecificIterable(new IndexedSeqView.Slice(this, from, until))
+  override def slice(from: Int, until: Int): C = fromSpecific(new IndexedSeqView.Slice(this, from, until))
 
-  override def lengthCompare(len: Int): Int = length - len
+  override def last: A = apply(length - 1)
+
+  override final def lengthCompare(len: Int): Int = Integer.compare(length, len)
 
   final override def knownSize: Int = length
+
+  override final def sizeCompare(that: Iterable[_]): Int = {
+    val res = that.sizeCompare(length)
+    // can't just invert the result, because `-Int.MinValue == Int.MinValue`
+    if (res == Int.MinValue) 1 else -res
+  }
 
   override def search[B >: A](elem: B)(implicit ord: Ordering[B]): SearchResult =
     binarySearch(elem, 0, length)(ord)
@@ -63,8 +83,11 @@ trait IndexedSeqOps[+A, +CC[_], +C] extends Any with SeqOps[A, CC, C] { self =>
   @tailrec
   private[this] def binarySearch[B >: A](elem: B, from: Int, to: Int)
                                         (implicit ord: Ordering[B]): SearchResult = {
-    if (to == from) InsertionPoint(from) else {
-      val idx = from+(to-from-1)/2
+    if (from < 0) binarySearch(elem, 0, to)
+    else if (to > length) binarySearch(elem, from, length)
+    else if (to <= from) InsertionPoint(from)
+    else {
+      val idx = from + (to - from - 1) / 2
       math.signum(ord.compare(elem, apply(idx))) match {
         case -1 => binarySearch(elem, from, idx)(ord)
         case  1 => binarySearch(elem, idx + 1, to)(ord)

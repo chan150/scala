@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc.
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 // Copyright 2005-2017 LAMP/EPFL and Lightbend, Inc.
 
 package scala.tools.nsc.interpreter
@@ -85,16 +97,13 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
     else new PathResolver(settings).resultAsURLs  // the compiler's classpath
     )
 
-
   // Run the code body with the given boolean settings flipped to true.
-  def withoutWarnings[T](body: => T): T = reporter.withoutPrintingResults {
-    val saved = settings.nowarn.value
-    if (!saved)
-      settings.nowarn.value = true
+  def withoutWarnings[T](body: => T): T =
+    reporter.withoutPrintingResults(IMain.withSuppressedSettings(settings, global)(body))
 
-    try body
-    finally if (!saved) settings.nowarn.value = false
-  }
+  def withSuppressedSettings(body: => Unit): Unit =
+    IMain.withSuppressedSettings(settings, global)(body)
+
   // Apply a temporary label for compilation (for example, script name)
   override def withLabel[A](temp: String)(body: => A): A = {
     val saved = label
@@ -137,10 +146,11 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
     val compiler = new Global(compilerSettings, startupReporter) with ReplGlobal
 
     try {
-      // if this crashes, REPL will hang its head in shame
       val run = new compiler.Run()
       assert(run.typerPhase != NoPhase, "REPL requires a typer phase.")
-      run compileSources List(new BatchSourceFile("<init>", "class $repl_$init { }"))
+      IMain.withSuppressedSettings(compilerSettings, compiler) {
+        run compileSources List(new BatchSourceFile("<init>", "class $repl_$init { }"))
+      }
 
       // there shouldn't be any errors yet; just in case, print them if we're debugging
       if (reporter.isDebug)
@@ -589,11 +599,12 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
       val unwrapped = rootCause(t)
 
       // Example input: $line3.$read$$iw$$iw$
-      val classNameRegex = (lineRegex + ".*").r
-      def isWrapperInit(x: StackTraceElement) = cond(x.getClassName) {
-        case classNameRegex() if x.getMethodName == nme.CONSTRUCTOR.decoded => true
+      val classNameRegex = s"$lineRegex.*".r
+      def isWrapperCode(x: StackTraceElement) = cond(x.getClassName) {
+        case classNameRegex() =>
+          x.getMethodName == nme.CONSTRUCTOR.decoded || x.getMethodName == printName
       }
-      val stackTrace = unwrapped stackTracePrefixString (!isWrapperInit(_))
+      val stackTrace = unwrapped.stackTracePrefixString(!isWrapperCode(_))
 
       withLastExceptionLock[String]({
         directBind[Throwable]("lastException", unwrapped)(StdReplTags.tagOfThrowable, classTag[Throwable])
@@ -847,25 +858,27 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
       // The symbol defined by the last member handler
       val resValSym = value
 
-      val extractionCode =
-        lineRep.packaged(stringFromWriter { code =>
-          // first line evaluates object to make sure constructor is run
-          // initial "" so later code can uniformly be: + etc
-          code.println(s"""
-             |object ${lineRep.evalName} {
-             |  ${if (resValSym != NoSymbol) s"lazy val ${lineRep.resultName} = ${originalPath(resValSym)}" else ""}
-             |  lazy val ${lineRep.printName}: _root_.java.lang.String = $executionWrapper {
-             |    $fullAccessPath
-             |    ( "" """.stripMargin) // the result extraction code will emit code to append strings to this initial ""
-
-          contributors map (_.resultExtractionCode(this)) foreach code.println
-
-          code.println("""
-             |    )
-             |  }
-             |}
-             """.stripMargin)
-        })
+      val extractionCode = stringFromWriter { code =>
+        code.println(s"""
+           |${lineRep.packageDecl} {
+           |object ${lineRep.evalName} {
+           |  ${if (resValSym != NoSymbol) s"lazy val ${lineRep.resultName} = ${originalPath(resValSym)}" else ""}
+           |  lazy val ${lineRep.printName}: _root_.java.lang.String = $executionWrapper {
+           |    $fullAccessPath
+           |""".stripMargin)
+        if (contributors.lengthCompare(1) > 0) {
+          code.println("val sb = new _root_.scala.StringBuilder")
+          contributors foreach (x => code.println(s"""sb.append("" ${x.resultExtractionCode(this)})"""))
+          code.println("sb.toString")
+        } else {
+          code.print(""""" """) // start with empty string
+          contributors foreach (x => code.print(x.resultExtractionCode(this)))
+          code.println()
+        }
+        code.println(s"""
+           |  }
+           |}}""".stripMargin)
+        }
 
       showCode(extractionCode)
 
@@ -1298,16 +1311,37 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
 
 /** Utility methods for the Interpreter. */
 object IMain {
-  /** Dummy identifier fragment inserted at the cursor before presentation compilation. Needed to support completion of `global.def<TAB>` */
+  /** Dummy identifier fragment inserted at the cursor before presentation compilation.
+   *  Needed to support completion of `global.def<TAB>`.
+   */
   final val DummyCursorFragment = "_CURSOR_"
 
-  // The two name forms this is catching are the two sides of this assignment:
-  //
-  // $line3.$read.$iw.$iw.Bippy =
-  //   $line3.$read$$iw$$iw$Bippy@4a6a00ca
-//  private def removeLineWrapper(s: String) = s.replaceAll("""\$line\d+[./]\$(read|eval|print)[$.]""", "")
-//  private def removeIWPackages(s: String)  = s.replaceAll("""\$(iw|read|eval|print)[$.]""", "")
-//  def stripString(s: String)               = removeIWPackages(removeLineWrapper(s))
-
+  /** Temporarily suppress some noisy settings.
+   */
+  private[interpreter] def withSuppressedSettings[A](settings: Settings, global: => Global)(body: => A): A = {
+    import settings.{reporter => _, _}
+    val wasWarning = !nowarn
+    val noisy = List(Xprint, Ytyperdebug, browse)
+    val current = (Xprint.value, Ytyperdebug.value, browse.value)
+    val noisesome = wasWarning || noisy.exists(!_.isDefault)
+    if (/*isDebug ||*/ !noisesome) body
+    else {
+      Xprint.value = List.empty
+      browse.value = List.empty
+      Ytyperdebug.value = false
+      if (wasWarning) nowarn.value = true
+      try body
+      finally {
+        Xprint.value       = current._1
+        Ytyperdebug.value  = current._2
+        browse.value       = current._3
+        if (wasWarning) nowarn.value = false
+        // ctl-D in repl can result in no compiler
+        val g = global
+        if (g != null) {
+          g.printTypings = current._2
+        }
+      }
+    }
+  }
 }
-

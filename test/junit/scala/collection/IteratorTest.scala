@@ -209,8 +209,8 @@ class IteratorTest {
     def mkIterator = Range.inclusive(1, 5).iterator map (x => { results += x ; x })
     def mkInfinite = Iterator continually { results += 1 ; 1 }
 
-    val s1 = LazyList.fromIterator(mkIterator)
-    val s2 = LazyList.fromIterator(mkInfinite)
+    val s1 = LazyList.from(mkIterator)
+    val s2 = LazyList.from(mkInfinite)
     // back and forth without slipping into nontermination.
     results += LazyList.from(1).iterator.drop(10).to(LazyList).drop(10).iterator.next()
     assertTrue(List(21).sameElements(results))
@@ -309,6 +309,14 @@ class IteratorTest {
     assertEquals(v2, v4)
     assertEquals(Some(v1), v2)
   }
+  // scala/bug#11153
+  @Test def handleExhaustedConcatSubIterator(): Unit = {
+    val it = Iterator.empty ++ Iterator.empty
+    // exhaust and clear internal state
+    it.hasNext
+    val concat = Iterator.empty ++ it
+    while (concat.hasNext) concat.next()
+  }
 
   @Test
   def hasCorrectDistinct: Unit = {
@@ -362,6 +370,11 @@ class IteratorTest {
   }
 
   @Test
+  def emptyKnownSize(): Unit = {
+    assertEquals(0, Iterator.empty.knownSize)
+  }
+
+  @Test
   def mkString: Unit = {
     val it = List("a", null, "b", null, "c", null).iterator
 
@@ -404,55 +417,70 @@ class IteratorTest {
     assertSame(Iterator.empty, iteratorBuilder.result())
   }
 
+  @Test def partition: Unit = {
+    val it = Iterator(1, 2, 3, 4, 5, 6, 7)
+    val (even, odd) = it.partition(n => (n & 1) == 0)
+    assertSameElements(List.from(even), List(2, 4, 6))
+    assertSameElements(List.from(odd), List(1, 3, 5, 7))
+  }
+
+  @Test def padTo: Unit = {
+    val it = Iterator(2, 4, 6, 8)
+    val padded = it.padTo(7, 10)
+    assertSameElements(List.from(padded), List(2, 4, 6, 8, 10, 10, 10))
+  }
+
+  @Test def corresponds: Unit = {
+    val it = Iterator(1, 2, 3, 4, 5)
+    assertTrue(it.corresponds(Seq(1, 4, 9, 16, 25)) { (a, b) => b == a*a })
+  }
+
+  @Test def aggregate: Unit = {
+    val result = Iterator('a', 'b', 'c').aggregate(0)({ (sum, ch) => sum + ch.toInt }, { (p1, p2) => p1 + p2 })
+    assertEquals(result, 294)
+  }
+
   @Test def copyToArray(): Unit = {
-    def check(a: Array[Int], start: Int, end: Int) = {
+    def check(a: Array[Int], copyTo: Array[Int] => Int, elemsWritten: Int, start: Int, end: Int): Unit = {
+
+      val copied = copyTo(a)
+      assertEquals(elemsWritten, copied)
+
       var i = 0
       while (i < start) {
-        assert(a(i) == 0)
+        assertEquals(a(i), 0)
         i += 1
       }
       while (i < a.length && i < end) {
-        assert(a(i) == i - start)
+        assertEquals(a(i), i - start)
         i += 1
       }
       while (i < a.length) {
-        assert(a(i) == 0)
+        assertEquals(a(i), 0)
         i += 1
       }
     }
 
     val far = 100000
     def l = Iterable.from(Range(0, 100)).iterator
-    check(l.copyToArray(new Array(100)),
-      0, far)
-    check(l.copyToArray(new Array(10)),
-      0, far)
-    check(l.copyToArray(new Array(1000)),
-      0, 100)
+    check(new Array(100), l.copyToArray(_), 100, 0, far)
+    check(new Array(10), l.copyToArray(_), 10, 0, far)
+    check(new Array(1000), l.copyToArray(_), 100, 0, 100)
 
-    check(l.copyToArray(new Array(100), 5),
-      5, 105)
-    check(l.copyToArray(new Array(10), 5),
-      5, 10)
-    check(l.copyToArray(new Array(1000), 5),
-      5, 105)
+    check(new Array(100), l.copyToArray(_, 5), 95, 5, 105)
+    check(new Array(10), l.copyToArray(_, 5), 5, 5, 10)
+    check(new Array(1000), l.copyToArray(_, 5), 100, 5, 105)
 
-    check(l.copyToArray(new Array(100), 5, 50),
-      5, 55)
-    check(l.copyToArray(new Array(10), 5, 50),
-      5, 10)
-    check(l.copyToArray(new Array(1000), 5, 50),
-      5, 55)
+    check(new Array(100), l.copyToArray(_, 5, 50), 50, 5, 55)
+    check(new Array(10), l.copyToArray(_, 5, 50), 5, 5, 10)
+    check(new Array(1000), l.copyToArray(_, 5, 50), 50, 5, 55)
 
     assertThrows[ArrayIndexOutOfBoundsException](l.copyToArray(new Array(10), -1))
     assertThrows[ArrayIndexOutOfBoundsException](l.copyToArray(new Array(10), -1, 10))
 
-    check(l.copyToArray(new Array(10), 10),
-      0, 0)
-    check(l.copyToArray(new Array(10), 10, 10),
-      0, 0)
-    check(l.copyToArray(new Array(10), 0, -1),
-      0, 0)
+    check(new Array(10), l.copyToArray(_, 10), 0, 0, 0)
+    check(new Array(10), l.copyToArray(_, 10, 10), 0, 0, 0)
+    check(new Array(10), l.copyToArray(_, 0, -1), 0, 0, 0)
   }
 
   // scala/bug#10709
@@ -483,5 +511,21 @@ class IteratorTest {
     }
     assertSameElements(List(10,11,13), scan)
     assertSameElements(List(10,-1,-1,-11,11,-2,-2,-13,13,-3), results)
+  }
+
+  @Test def unfoldCorrectness(): Unit = {
+    val it1 = Iterator.unfold(1)(i => if (i > 10) None else Some((i, i + 1)))
+    assertSameElements(1 to 10, it1)
+
+    val it2 = Iterator.unfold(0)(_ => None)
+    assertSameElements(Nil, it2)
+  }
+
+  @Test def unfoldLaziness(): Unit = {
+    var executed: Boolean = false
+    val it = Iterator.unfold(0)(_ => {executed = true; None})
+    assertFalse(executed)
+    it.toList
+    assertTrue(executed)
   }
 }
